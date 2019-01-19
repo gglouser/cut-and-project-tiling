@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Cut and Project Tiling</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="css/main.css">
+    <script type="module" src="js/cutproject.js"></script>
+  </head>
+  <body>
+    <canvas id="main">This applet requires the canvas, which your browser does not support.</canvas>
+    <div id="controls">
+      <div id="aboutToggle" class="toggle">About</div>
+      <div id="about">
+        Cut and Project Tiling<br>
+        Grant Glouser 2019<br>
+        <a href="README.md">About...</a><br>
+        <input type="button" id="save" value="Save tiling">
+        <input type="button" id="load" value="Load tiling">
+        <br>
+        <input type="button" id="animate" value="Animate">
+      </div>
+      <div id="axisToggle" class="toggle active">Axis Controls</div>
+      <div id="axisControls">
+        <canvas id="axisRosette"></canvas>
+        <div id="axesExtra">
+          <select id="numAxes">
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+          </select>
+          <span id="numAxesLabel">axes</span>
+          <input type="button" id="reset" value="Reset Axes">
+        </div>
+      </div>
+      <div id="offsetToggle" class="toggle">Offsets</div>
+      <div id="offsetControls"></div>
+      <div id="colorToggle" class="toggle">Colors</div>
+      <div id="colorControls"></div>
+    </div>
+    <div id="codeShow">
+      <div>Copy this tiling code or use the hyperlink below.</div>
+      <div id="codeCode">xyz</div>
+      <div>
+        <a id="codeLink" href="?a=xyz">Link</a>
+        <input type="button" id="codeDone" value="Done">
+      </div>
+    </div>
+    <div id="codeLoad">
+      Enter a tiling code:
+      <input type="text" id="codeInput">
+    </div>
+  </body>
+</html>
