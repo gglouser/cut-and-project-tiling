@@ -65,6 +65,16 @@
 .active:after {
     content: '\FF0D'; /* Unicode fullwidth hyphen-minus */
 }
+#about i {
+    font-size: smaller;
+}
+#about ul {
+    margin: 0px;
+    padding-inline-start: 20px;
+}
+#about input {
+    width: 100%;
+}
 #codeShow {
     position: absolute;
     top: -200px;

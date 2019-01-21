@@ -11,12 +11,15 @@
     <div id="controls">
       <div id="aboutToggle" class="toggle">About</div>
       <div id="about">
-        Cut and Project Tiling<br>
-        Grant Glouser 2019<br>
-        <a href="README.md">About...</a><br>
-        <input type="button" id="save" value="Save tiling">
-        <input type="button" id="load" value="Load tiling">
-        <br>
+        <b>Cut and Project Tiling</b><br>
+        <i>by Grant Glouser</i><br>
+        <ul>
+          <li><a href="docs/intro.html">What is this?</a></li>
+          <li><a href="docs/gallery.html">See some examples</a></li>
+          <li><a href="https://github.com/gglouser/cut-and-project-tiling">GitHub project page</a></li>
+        </ul>
+        <input type="button" id="save" value="Share tiling"><br>
+        <input type="button" id="load" value="Enter tiling code"><br>
         <input type="button" id="animate" value="Animate">
       </div>
       <div id="axisToggle" class="toggle active">Axis Controls</div>
@@ -40,10 +43,9 @@
       <div id="colorControls"></div>
     </div>
     <div id="codeShow">
-      <div>Copy this tiling code or use the hyperlink below.</div>
+      <div>Copy the tiling code below or use <a id="codeLink">this link</a>.</div>
       <div id="codeCode">xyz</div>
       <div>
-        <a id="codeLink" href="?a=xyz">Link</a>
         <input type="button" id="codeDone" value="Done">
       </div>
     </div>
