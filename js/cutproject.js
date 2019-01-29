@@ -1,5 +1,5 @@
 import * as Vec from './vector.js';
-import { Tiling } from './tiling.js';
+import { Tiling, Tiling2 } from './tiling.js';
 import { AxisControls, OffsetControls } from './controls.js';
 import { encodeState, decodeState, base64ToBlob } from './statecode.js';
 
@@ -31,15 +31,15 @@ class TilingView {
 
     initColors(dims) {
         if (dims === 3) {
-            this.colors = ['#808080', '#ffffff', '#c0c0c0'];
+            this.colors = ['#808080', '#e8e8ff', '#c0c0c0'];
             return;
         }
 
         const simpleColors = {
-            4: ['#c0c0c0', '#ffffff', '#c0c0c0'],
-            5: ['#ffffff', '#808080', '#808080', '#ffffff'],
-            6: ['#808080', '#c0c0c0', '#ffffff', '#c0c0c0', '#808080'],
-            7: ['#c0c0c0', '#ffffff', '#808080', '#808080', '#ffffff', '#c0c0c0'],
+            4: ['#e8e8ff', '#808080', '#e8e8ff'],
+            5: ['#e8e8ff', '#808080', '#808080', '#e8e8ff'],
+            6: ['#808080', '#c0c0c0', '#e8e8ff', '#c0c0c0', '#808080'],
+            7: ['#c0c0c0', '#e8e8ff', '#808080', '#808080', '#e8e8ff', '#c0c0c0'],
         }[dims];
         this.colors = [];
         for (let i = 0; i < dims-1; i++) {
@@ -49,7 +49,7 @@ class TilingView {
         }
     }
 
-    draw(edges, faces) {
+    draw(faces) {
         const ctx = this.canvas.getContext('2d');
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -57,6 +57,9 @@ class TilingView {
         ctx.translate(ctx.canvas.width / 2, ctx.canvas.height / 2);
         ctx.scale(this.scale, this.scale);
 
+        ctx.lineWidth = GRID_LINE_W;
+        ctx.lineJoin = 'bevel';
+        ctx.strokeStyle = this.lineColor;
         faces.forEach((f) => {
             ctx.fillStyle = this.colors[f.type];
             ctx.beginPath();
@@ -66,16 +69,8 @@ class TilingView {
             ctx.lineTo(f.verts[3][0], f.verts[3][1]);
             ctx.closePath();
             ctx.fill();
+            ctx.stroke();
         });
-
-        ctx.lineWidth = GRID_LINE_W;
-        ctx.strokeStyle = this.lineColor;
-        ctx.beginPath();
-        edges.forEach((e) => {
-            ctx.moveTo(e[0][0], e[0][1]);
-            ctx.lineTo(e[1][0], e[1][1]);
-        });
-        ctx.stroke();
 
         ctx.restore();
     }
@@ -220,9 +215,14 @@ class TilingApp {
 
         const canvas = document.getElementById('main');
         this.tilingView = new TilingView(canvas, this, dims);
-        this.tiling = new Tiling(dims,
-                                 canvas.width / this.tilingView.scale,
-                                 canvas.height / this.tilingView.scale);
+
+        const methodPicker = document.getElementById('tileGen');
+        methodPicker.addEventListener('change', () => {
+            const state = this.getState();
+            this.tiling = this.createTiling(methodPicker.value, state.dims);
+            this.setState(state);
+        });
+        this.tiling = this.createTiling(methodPicker.value, dims);
 
         const axisCanvas = document.getElementById('axisRosette');
         this.axisControls = new AxisControls(axisCanvas, this, dims);
@@ -302,6 +302,16 @@ class TilingApp {
         this.needsNewParams = false;
     }
 
+    createTiling(method, dims) {
+        const viewWidth = this.tilingView.canvas.width / this.tilingView.scale;
+        const viewHeight = this.tilingView.canvas.height / this.tilingView.scale;
+        if (method === 'project') {
+            return new Tiling(dims, viewWidth, viewHeight);
+        } else if (method === 'multigrid') {
+            return new Tiling2(dims, viewWidth, viewHeight);
+        }
+    }
+
     initColorControls(dims) {
         // Use width of main control box because the color controls might be hidden.
         const controlsWidth = document.getElementById('controls').clientWidth;
@@ -335,7 +345,7 @@ class TilingApp {
     }
 
     draw() {
-        this.tilingView.draw(this.tiling.edges, this.tiling.faces);
+        this.tilingView.draw(this.tiling.faces);
         this.axisControls.draw();
     }
 
