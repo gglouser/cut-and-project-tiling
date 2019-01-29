@@ -28,6 +28,10 @@ Nice overview in a pair of articles from the American Mathematical Society about
 - [Penrose Tiles Talk Across Miles](http://www.ams.org/publicoutreach/feature-column/fcarc-penrose)
 - [Penrose Tilings Tied up in Ribbons](http://www.ams.org/publicoutreach/feature-column/fcarc-ribbons)
 
+[Quasitiler](http://www.geom.uiuc.edu/apps/quasitiler/about.html) by Eugenio Durand
+
+[deBruijn](http://www.gregegan.net/APPLETS/12/12.html) applet by Greg Egan. Accompanying [explanation](http://www.gregegan.net/APPLETS/12/deBruijnNotes.html) helped me understand the correspondence between the cut-and-project and multigrid methods.
+
 Wikipedia
 - [Penrose tiling](https://en.wikipedia.org/wiki/Penrose_tiling)
 - [Aperiodic tiling](https://en.wikipedia.org/wiki/Aperiodic_tiling)

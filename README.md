@@ -18,4 +18,4 @@ This applet is (currently) plain old ES6 JavaScript. It requires HTML canvas sup
 
 ## Acknowledgments
 
-The axis control rosette appeared in an old screenshot I once saw of a cut-and-project tiling generator that ran on NeXTSTEP. Never saw the code, but I borrowed the idea. (Before that, I was trying to control the orientation of the cutting plane with angles.)
+I drew inspiration from [Quasitiler](http://www.geom.uiuc.edu/apps/quasitiler/about.html). My favorite feature borrowed from it is the axis control rosette. Before that, I was trying to control the orientation of the cutting plane with angles, and Quasitiler's way is far superior.
