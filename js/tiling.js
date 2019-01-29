@@ -35,6 +35,7 @@ class VertexCache {
     }
 }
 
+// Generate the tiling using the cut-and-project method.
 export class Tiling {
     constructor(dims, viewWidth, viewHeight) {
         this.dims = dims;
@@ -279,8 +280,14 @@ export class Tiling {
         }).join('');
     }
 
+    // Project a point in space onto the view plane.
     project(v) {
         return Vec.project(Vec.sub(v, this.offset), this.basis);
+    }
+
+    // Take a point on the view plane to the corresponding point in space.
+    unproject(x) {
+        return Vec.add(Vec.combine(x[0], this.basis[0], x[1], this.basis[1]), this.offset);
     }
 }
 
@@ -316,4 +323,101 @@ function getFaceTypes(dims) {
         }
     }
     return faceType;
+}
+
+// Generate the tiling using the multigrid method.
+export class Tiling2 extends Tiling {
+    constructor (dims, viewWidth, viewHeight) {
+        super(dims, viewWidth, viewHeight);
+    }
+
+    newParams() {
+        // It will be useful to have the projection of each axis on the view plane.
+        // This is the same as the transpose of the basis.
+        const axis = [];
+        for (let i = 0; i < this.dims; i++) {
+            axis.push([this.basis[0][i], this.basis[1][i]]);
+        }
+
+        const hbound = this.viewWidth/2 + Math.SQRT1_2;
+        const vbound = this.viewHeight/2 + Math.SQRT1_2;
+        const gridRanges = this.getGridRanges(hbound, vbound);
+        const faceTypes = getFaceTypes(this.dims);
+
+        this.edges = [];
+        this.faces = [];
+        for (let i = 0; i < this.dims-1; i++) {
+            for (let j = i+1; j < this.dims; j++) {
+                const d = axis[i][0]*axis[j][1] - axis[j][0]*axis[i][1];
+                if (Math.abs(d) < Number.EPSILON) {
+                    // Faces with this orientation have zero area / are perpendicular
+                    // to the cut plane, so they do not produce tiles.
+                    continue;
+                }
+
+                for (let ki = Math.floor(gridRanges.min[i]); ki < Math.ceil(gridRanges.max[i]); ki++) {
+                    for (let kj = Math.floor(gridRanges.min[j]); kj < Math.ceil(gridRanges.max[j]); kj++) {
+                        // Find the intersection (a,b) of the grid lines ki and kj.
+                        const a = ((ki+0.5-this.offset[i])*axis[j][1] - (kj+0.5-this.offset[j])*axis[i][1]) / d;
+                        const b = ((kj+0.5-this.offset[j])*axis[i][0] - (ki+0.5-this.offset[i])*axis[j][0]) / d;
+
+                        // Find the coordinates of the key vertex for the face corresponding to this intersection.
+                        const f_unproj = this.unproject([a, b]).map((x, ix) => {
+                            if (ix === i) {
+                                return ki;
+                            } else if (ix === j) {
+                                return kj;
+                            }
+
+                            // Check for degenerate case where three or more grid line intersect.
+                            // const xx = 2*(x - Math.floor(x));
+                            // if (Math.abs(xx - 1) < 1e-10) {
+                            //     return x;
+                            // }
+
+                            return Math.round(x);
+                        });
+
+                        const f1 = this.project(f_unproj);
+                        const mid_x = f1[0] + (axis[i][0] + axis[j][0])/2;
+                        const mid_y = f1[1] + (axis[i][1] + axis[j][1])/2;
+                        if (Math.abs(mid_x) > hbound || Math.abs(mid_y) > vbound) {
+                            continue;
+                        }
+
+                        const f2 = Vec.add(f1, axis[i]);
+                        const f3 = Vec.add(f2, axis[j]);
+                        const f4 = Vec.add(f1, axis[j]);
+                        this.faces.push({
+                            verts: [f1, f2, f3, f4],
+                            a1: i,
+                            a2: j,
+                            type: faceTypes[i][j],
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    getGridRanges(hbound, vbound) {
+        // Find the range of grid lines for each axis.
+        const corners = [
+            this.unproject([-hbound, -vbound]),
+            this.unproject([-hbound,  vbound]),
+            this.unproject([ hbound, -vbound]),
+            this.unproject([ hbound,  vbound]),
+        ];
+        const grid_maxs = [];
+        const grid_mins = [];
+        for (let i = 0; i < this.dims; i++) {
+            grid_maxs.push(corners.reduce((acc, p) => Math.max(acc, p[i]), -Infinity));
+            grid_mins.push(corners.reduce((acc, p) => Math.min(acc, p[i]), Infinity));
+        }
+        // console.debug('bounds =', grid_maxs, grid_mins);
+        return {
+            max: grid_maxs,
+            min: grid_mins,
+        };
+    }
 }
