@@ -339,6 +339,16 @@ export class Tiling2 extends Tiling {
             axis.push([this.basis[0][i], this.basis[1][i]]);
         }
 
+        // It will also be useful to have the cross products of each pair of axes.
+        const cross = [];
+        for (let i = 0; i < this.dims; i++) {
+            const row = [];
+            for (let j = 0; j < this.dims; j++) {
+                row.push(i === j ? 0 : axis[i][0]*axis[j][1] - axis[j][0]*axis[i][1]);
+            }
+            cross.push(row);
+        }
+
         const hbound = this.viewWidth/2 + Math.SQRT1_2;
         const vbound = this.viewHeight/2 + Math.SQRT1_2;
         const gridRanges = this.getGridRanges(hbound, vbound);
@@ -348,8 +358,7 @@ export class Tiling2 extends Tiling {
         this.faces = [];
         for (let i = 0; i < this.dims-1; i++) {
             for (let j = i+1; j < this.dims; j++) {
-                const d = axis[i][0]*axis[j][1] - axis[j][0]*axis[i][1];
-                if (Math.abs(d) < Number.EPSILON) {
+                if (Math.abs(cross[i][j]) < Number.EPSILON) {
                     // Faces with this orientation have zero area / are perpendicular
                     // to the cut plane, so they do not produce tiles.
                     continue;
@@ -358,8 +367,8 @@ export class Tiling2 extends Tiling {
                 for (let ki = Math.floor(gridRanges.min[i]); ki < Math.ceil(gridRanges.max[i]); ki++) {
                     for (let kj = Math.floor(gridRanges.min[j]); kj < Math.ceil(gridRanges.max[j]); kj++) {
                         // Find the intersection (a,b) of the grid lines ki and kj.
-                        const a = ((ki+0.5-this.offset[i])*axis[j][1] - (kj+0.5-this.offset[j])*axis[i][1]) / d;
-                        const b = ((kj+0.5-this.offset[j])*axis[i][0] - (ki+0.5-this.offset[i])*axis[j][0]) / d;
+                        const a = ((ki+0.5-this.offset[i])*axis[j][1] - (kj+0.5-this.offset[j])*axis[i][1]) / cross[i][j];
+                        const b = ((kj+0.5-this.offset[j])*axis[i][0] - (ki+0.5-this.offset[i])*axis[j][0]) / cross[i][j];
 
                         // Find the coordinates of the key vertex for the face corresponding to this intersection.
                         const f_unproj = this.unproject([a, b]).map((x, ix) => {
@@ -370,10 +379,16 @@ export class Tiling2 extends Tiling {
                             }
 
                             // Check for degenerate case where three or more grid line intersect.
-                            // const xx = 2*(x - Math.floor(x));
-                            // if (Math.abs(xx - 1) < 1e-10) {
-                            //     return x;
-                            // }
+                            const xx = Math.abs(2*(x - Math.floor(x)) - 1);
+                            if (xx < 1e-10) {
+                                // If axis ix lies between axis i and axis j, then shift the tile
+                                // in the ix direction by rounding up instead of down.
+                                if (cross[i][j]*cross[i][ix] > 0 && cross[i][j]*cross[ix][j] > 0) {
+                                    return Math.ceil(x);
+                                } else {
+                                    return Math.floor(x);
+                                }
+                            }
 
                             return Math.round(x);
                         });
