@@ -265,6 +265,7 @@ class TilingApp {
             this.genStateCode((code) => {
                 const codeCode = document.getElementById('codeCode');
                 codeCode.innerHTML = code;
+                window.getSelection().selectAllChildren(codeCode);
                 const codeLink = document.getElementById('codeLink');
                 codeLink.href = '?a=' + code;
                 const codeShow = document.getElementById('codeShow');

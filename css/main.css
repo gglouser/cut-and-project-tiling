@@ -90,7 +90,7 @@
 #codeCode {
     display: inline-block;
     max-width: 400px;
-    overflow-wrap: break-word;
+    word-break: break-all;
     font-family: sans-serif;
     padding: 3px;
     background-color: white;
