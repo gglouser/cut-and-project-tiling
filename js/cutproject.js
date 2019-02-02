@@ -255,8 +255,10 @@ class TilingApp {
         animateBtn.addEventListener('click', () => {
             if (!this.animating) {
                 this.startAnimation();
+                animateBtn.value = 'Stop animation';
             } else {
                 this.stopAnimation();
+                animateBtn.value = 'Animate';
             }
         });
 
