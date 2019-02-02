@@ -332,82 +332,38 @@ export class Tiling2 extends Tiling {
     }
 
     newParams() {
-        // It will be useful to have the projection of each axis on the view plane.
-        // This is the same as the transpose of the basis.
-        const axis = [];
-        for (let i = 0; i < this.dims; i++) {
-            axis.push([this.basis[0][i], this.basis[1][i]]);
-        }
-
-        // It will also be useful to have the cross products of each pair of axes.
-        const cross = [];
-        for (let i = 0; i < this.dims; i++) {
-            const row = [];
-            for (let j = 0; j < this.dims; j++) {
-                row.push(i === j ? 0 : axis[i][0]*axis[j][1] - axis[j][0]*axis[i][1]);
-            }
-            cross.push(row);
-        }
-
-        const hbound = this.viewWidth/2 + Math.SQRT1_2;
-        const vbound = this.viewHeight/2 + Math.SQRT1_2;
-        const gridRanges = this.getGridRanges(hbound, vbound);
-        const faceTypes = getFaceTypes(this.dims);
+        this.setup();
 
         this.edges = [];
         this.faces = [];
         for (let i = 0; i < this.dims-1; i++) {
             for (let j = i+1; j < this.dims; j++) {
-                if (Math.abs(cross[i][j]) < Number.EPSILON) {
+                if (Math.abs(this.cross[i][j]) < Number.EPSILON) {
+                    // Axis i and axis j are parallel.
                     // Faces with this orientation have zero area / are perpendicular
                     // to the cut plane, so they do not produce tiles.
                     continue;
                 }
 
-                for (let ki = Math.floor(gridRanges.min[i]); ki < Math.ceil(gridRanges.max[i]); ki++) {
-                    for (let kj = Math.floor(gridRanges.min[j]); kj < Math.ceil(gridRanges.max[j]); kj++) {
-                        // Find the intersection (a,b) of the grid lines ki and kj.
-                        const a = ((ki+0.5-this.offset[i])*axis[j][1] - (kj+0.5-this.offset[j])*axis[i][1]) / cross[i][j];
-                        const b = ((kj+0.5-this.offset[j])*axis[i][0] - (ki+0.5-this.offset[i])*axis[j][0]) / cross[i][j];
+                for (let ki = this.gridMin[i]; ki < this.gridMax[i]; ki++) {
+                    for (let kj = this.gridMin[j]; kj < this.gridMax[j]; kj++) {
+                        const faceVert = this.getFaceVertex(i, j, ki, kj);
+                        const f1 = this.project(faceVert);
 
-                        // Find the coordinates of the key vertex for the face corresponding to this intersection.
-                        const f_unproj = this.unproject([a, b]).map((x, ix) => {
-                            if (ix === i) {
-                                return ki;
-                            } else if (ix === j) {
-                                return kj;
-                            }
-
-                            // Check for degenerate case where three or more grid line intersect.
-                            const xx = Math.abs(2*(x - Math.floor(x)) - 1);
-                            if (xx < 1e-10) {
-                                // If axis ix lies between axis i and axis j, then shift the tile
-                                // in the ix direction by rounding up instead of down.
-                                if (cross[i][j]*cross[i][ix] > 0 && cross[i][j]*cross[ix][j] > 0) {
-                                    return Math.ceil(x);
-                                } else {
-                                    return Math.floor(x);
-                                }
-                            }
-
-                            return Math.round(x);
-                        });
-
-                        const f1 = this.project(f_unproj);
-                        const mid_x = f1[0] + (axis[i][0] + axis[j][0])/2;
-                        const mid_y = f1[1] + (axis[i][1] + axis[j][1])/2;
-                        if (Math.abs(mid_x) > hbound || Math.abs(mid_y) > vbound) {
+                        const mid_x = f1[0] + (this.axis[i][0] + this.axis[j][0])/2;
+                        const mid_y = f1[1] + (this.axis[i][1] + this.axis[j][1])/2;
+                        if (Math.abs(mid_x) > this.hbound || Math.abs(mid_y) > this.vbound) {
                             continue;
                         }
 
-                        const f2 = Vec.add(f1, axis[i]);
-                        const f3 = Vec.add(f2, axis[j]);
-                        const f4 = Vec.add(f1, axis[j]);
+                        const f2 = Vec.add(f1, this.axis[i]);
+                        const f3 = Vec.add(f2, this.axis[j]);
+                        const f4 = Vec.add(f1, this.axis[j]);
                         this.faces.push({
                             verts: [f1, f2, f3, f4],
                             a1: i,
                             a2: j,
-                            type: faceTypes[i][j],
+                            type: this.faceTypes[i][j],
                         });
                     }
                 }
@@ -415,7 +371,85 @@ export class Tiling2 extends Tiling {
         }
     }
 
-    getGridRanges(hbound, vbound) {
+    getFaceVertex(i, j, ki, kj) {
+        // Find the intersection (a,b) of the grid lines ki and kj.
+        const a = ((ki+0.5-this.offset[i])*this.axis[j][1] - (kj+0.5-this.offset[j])*this.axis[i][1]) / this.cross[i][j];
+        const b = ((kj+0.5-this.offset[j])*this.axis[i][0] - (ki+0.5-this.offset[i])*this.axis[j][0]) / this.cross[i][j];
+
+        // Find the coordinates of the key vertex for the face
+        // corresponding to this intersection.
+        return this.unproject([a, b]).map((x, ix) => {
+            if (ix === i) {
+                return ki;
+            } else if (ix === j) {
+                return kj;
+            }
+
+            // Check for multiple intersections. If the fractional part of this coord
+            // is 0.5, then it is on one of the grid lines for ix.
+            if (Math.abs(x - Math.floor(x) - 0.5) < 1e-10) {
+                if (Math.abs(this.cross[i][ix]) < Number.EPSILON) {
+                    // Axis i and ix are parallel. Shift the tile in the
+                    // ix direction if they point the same direction
+                    // AND this is the tile such that ix < i.
+                    if (Vec.dot(this.axis[ix], this.axis[i]) > 0 && ix < i) {
+                        return Math.ceil(x);
+                    }
+                    return Math.floor(x);
+                } else if (Math.abs(this.cross[ix][j]) < Number.EPSILON) {
+                    // Axis j and ix are parallel. Shift the tile in the
+                    // ix direction if they point the same direction
+                    // AND this is the tile such that ix < j.
+                    if (Vec.dot(this.axis[ix], this.axis[j]) > 0 && ix < j) {
+                        return Math.ceil(x);
+                    }
+                    return Math.floor(x);
+                } else if (this.cross[i][j]*this.cross[i][ix] > 0
+                            && this.cross[i][j]*this.cross[ix][j] > 0) {
+                    // Axis ix lies between axis i and axis j. Shift the tile
+                    // in the ix direction by rounding up instead of down.
+                    return Math.ceil(x);
+                }
+                return Math.floor(x);
+            }
+
+            return Math.round(x);
+        });
+
+    }
+
+    setup() {
+        this.setupAxes();
+        this.hbound = this.viewWidth/2 + Math.SQRT1_2;
+        this.vbound = this.viewHeight/2 + Math.SQRT1_2;
+        this.setupGridRanges(this.hbound, this.vbound);
+        this.faceTypes = getFaceTypes(this.dims);
+    }
+
+    setupAxes() {
+        // It will be useful to have the projection of each axis on the view plane.
+        // This is the same as the transpose of the basis.
+        this.axis = [];
+        for (let i = 0; i < this.dims; i++) {
+            this.axis.push([this.basis[0][i], this.basis[1][i]]);
+        }
+
+        // It will also be useful to have the cross products of each pair of axes.
+        this.cross = [];
+        for (let i = 0; i < this.dims; i++) {
+            this.cross.push([]);
+            for (let j = 0; j <= i; j++) {
+                if (i === j) {
+                    this.cross[i][i] = 0;
+                } else {
+                    this.cross[i][j] = this.axis[i][0]*this.axis[j][1] - this.axis[j][0]*this.axis[i][1];
+                    this.cross[j][i] = -this.cross[i][j];
+                }
+            }
+        }
+    }
+
+    setupGridRanges(hbound, vbound) {
         // Find the range of grid lines for each axis.
         const corners = [
             this.unproject([-hbound, -vbound]),
@@ -423,16 +457,11 @@ export class Tiling2 extends Tiling {
             this.unproject([ hbound, -vbound]),
             this.unproject([ hbound,  vbound]),
         ];
-        const grid_maxs = [];
-        const grid_mins = [];
+        this.gridMax = [];
+        this.gridMin = [];
         for (let i = 0; i < this.dims; i++) {
-            grid_maxs.push(corners.reduce((acc, p) => Math.max(acc, p[i]), -Infinity));
-            grid_mins.push(corners.reduce((acc, p) => Math.min(acc, p[i]), Infinity));
+            this.gridMax.push(corners.reduce((acc, p) => Math.max(acc, Math.ceil(p[i])), -Infinity));
+            this.gridMin.push(corners.reduce((acc, p) => Math.min(acc, Math.floor(p[i])), Infinity));
         }
-        // console.debug('bounds =', grid_maxs, grid_mins);
-        return {
-            max: grid_maxs,
-            min: grid_mins,
-        };
     }
 }
