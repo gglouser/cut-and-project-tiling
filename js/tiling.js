@@ -160,28 +160,28 @@ export class Tiling {
 
     moveAxis(changeAxis, x, y) {
         // Clamp u_i and v_i to inside the unit circle.
-        let u_i = x;
-        let v_i = y;
-        let k = Math.hypot(u_i, v_i);
-        if (k > 1) {
-            u_i /= k;
-            v_i /= k;
-            k = 1;
-        } else if (k <= Number.EPSILON) {
+        let unit_x = x;
+        let unit_y = y;
+        let k = Math.hypot(x, y);
+        if (k <= Number.EPSILON) {
+            unit_x = 1;
+            unit_y = 0;
             k = 0;
+        } else {
+            unit_x /= k;
+            unit_y /= k;
+            k = Math.min(k, 1);
         }
 
-        // Rotate u and v so that u is nearly aligned with the change axis.
+        // Convenient aliases for the basis vectors.
         let u = this.basis[0];
         let v = this.basis[1];
-        if (k !== 0) {
-            const unit_u = u_i/k;
-            const unit_v = v_i/k;
-            const u1 = Vec.combine( unit_u, u, unit_v, v);
-            const v1 = Vec.combine(-unit_v, u, unit_u, v);
-            u = u1;
-            v = v1;
-        }
+
+        // Rotate u and v so that u is nearly aligned with the change axis.
+        const u1 = Vec.combine( unit_x, u, unit_y, v);
+        const v1 = Vec.combine(-unit_y, u, unit_x, v);
+        u = u1;
+        v = v1;
 
         // Re-normalize v orthogonal to the change axis.
         Vec.renormalize(v, changeAxis, 0);
@@ -191,17 +191,9 @@ export class Tiling {
         Vec.renormalize(u, changeAxis, k);
 
         // Rotate u and v to new direction.
-        if (k !== 0) {
-            const unit_u = u_i/k;
-            const unit_v = v_i/k;
-            const u1 = Vec.combine(unit_u, u, -unit_v, v);
-            const v1 = Vec.combine(unit_v, u,  unit_u, v);
-            u = u1;
-            v = v1;
-        }
+        this.basis[0] = Vec.combine(unit_x, u, -unit_y, v);
+        this.basis[1] = Vec.combine(unit_y, u,  unit_x, v);
 
-        this.basis[0] = u;
-        this.basis[1] = v;
         // this.basisTest();
     }
 
