@@ -2,3 +2,9 @@
 .hgignore
 tmp
 notes.txt
+node_modules
+dist
+crate/bin
+crate/pkg
+crate/target
+crate/Cargo.lock

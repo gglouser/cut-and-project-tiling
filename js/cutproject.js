@@ -2,6 +2,7 @@ import * as Vec from './vector.js';
 import { Tiling, Tiling2 } from './tiling.js';
 import { AxisControls, OffsetControls } from './controls.js';
 import { encodeState, decodeState, base64ToBlob } from './statecode.js';
+import { TilingWasm } from './tiling_wasm.js';
 
 const GRID_SCALE = 60;
 const GRID_SCALE_MIN = 30;
@@ -312,6 +313,8 @@ class TilingApp {
             return new Tiling(dims, viewWidth, viewHeight);
         } else if (method === 'multigrid') {
             return new Tiling2(dims, viewWidth, viewHeight);
+        } else if (method == 'wasm') {
+            return new TilingWasm(dims, viewWidth, viewHeight);
         }
     }
 
@@ -379,9 +382,10 @@ class TilingApp {
 
     updateAxisControls() {
         // Move axis controls to match the basis vectors.
+        const basis = this.tiling.basis;
         this.axisControls.ctls.forEach((ctl, i) => {
-            ctl.x = this.tiling.basis[0][i];
-            ctl.y = this.tiling.basis[1][i];
+            ctl.x = basis[0][i];
+            ctl.y = basis[1][i];
         });
     }
 
@@ -398,7 +402,7 @@ class TilingApp {
     }
 
     offsetChanged(i, value) {
-        this.tiling.offset[i] = value;
+        this.tiling.setOffsetComp(i, value);
         this.paramsChanged();
     }
 
@@ -467,8 +471,10 @@ class TilingApp {
         const dt = (this.animTime >= 0) ? timestamp - this.animTime : 0;
         this.animTime = timestamp;
         const theta = 2*Math.PI / 3e4 * dt;
-        Vec.rotate(this.tiling.basis[0], 0, 1, theta);
-        Vec.rotate(this.tiling.basis[1], 0, 1, theta);
+        const basis = this.tiling.basis;
+        Vec.rotate(basis[0], 0, 1, theta);
+        Vec.rotate(basis[1], 0, 1, theta);
+        this.tiling.basis = basis;
         this.updateAxisControls();
         this.tiling.newParams();
         this.draw();
@@ -546,4 +552,8 @@ function init() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === "complete" || document.readyState === "loaded") {
+    init();
+} else {
+    document.addEventListener('DOMContentLoaded', () => init);
+}

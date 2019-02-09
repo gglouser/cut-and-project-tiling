@@ -46,6 +46,10 @@ export class Tiling {
         this.newParams();
     }
 
+    setOffsetComp(i, x) {
+        this.offset[i] = x;
+    }
+
     resetBasis() {
         // Set up the basis vectors for the cutting plane.
         this.basis = [Vec.zero(this.dims), Vec.zero(this.dims)];
