@@ -1,8 +1,8 @@
 import * as Vec from './vector.js';
-import { Tiling, Tiling2 } from './tiling.js';
+import { TilingState, generateCutProj, generateMultigrid } from './tiling.js';
 import { AxisControls, OffsetControls } from './controls.js';
 import { encodeState, decodeState, base64ToBlob } from './statecode.js';
-import { TilingWasm } from './tiling_wasm.js';
+import { generateWasm } from './tiling_wasm.js';
 
 const GRID_SCALE = 60;
 const GRID_SCALE_MIN = 30;
@@ -18,8 +18,11 @@ class TilingView {
         this.scale = GRID_SCALE;
         this.lineColor = LINE_COLOR;
         this.initColors(dims);
+
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
+        this.calcViewSize();
+
         canvas.addEventListener('mousedown', this, false);
         canvas.addEventListener('mousemove', this, false);
         canvas.addEventListener('mouseup', this, false);
@@ -187,22 +190,29 @@ class TilingView {
         this.app.translateOffset(dx/this.scale, dy/this.scale);
     }
 
+    calcViewSize() {
+        this.viewWidth = this.canvas.width / this.scale;
+        this.viewHeight = this.canvas.height / this.scale;
+    }
+
     viewZoom(dzoom) {
         const oldScale = this.scale;
         if (dzoom > 1) {
             this.scale = Math.min(GRID_SCALE_MAX, Math.ceil(this.scale * dzoom));
         } else if (dzoom < 1) {
             this.scale = Math.max(GRID_SCALE_MIN, Math.floor(this.scale * dzoom));
-        }
+        }    
         if (this.scale !== oldScale) {
-            this.app.setViewSize(this.canvas.width, this.canvas.height, this.scale);
-        }
-    }
+            this.calcViewSize();
+            this.app.redraw();
+        }    
+    }    
 
     resize() {
         this.canvas.width = this.canvas.clientWidth;
         this.canvas.height = this.canvas.clientHeight;
-        this.app.setViewSize(this.canvas.width, this.canvas.height, this.scale);
+        this.calcViewSize();
+        this.app.redraw();
     }
 }
 
@@ -213,17 +223,16 @@ class TilingApp {
         numAxes.addEventListener('change', () => {
             this.setState({ dims: parseInt(numAxes.value, 10) });
         });
+        this.state = new TilingState(dims);
 
         const canvas = document.getElementById('main');
         this.tilingView = new TilingView(canvas, this, dims);
 
         const methodPicker = document.getElementById('tileGen');
         methodPicker.addEventListener('change', () => {
-            const state = this.getState();
-            this.tiling = this.createTiling(methodPicker.value, state.dims);
-            this.setState(state);
+            this.tilingGen = this.getTilingGen(methodPicker.value);
         });
-        this.tiling = this.createTiling(methodPicker.value, dims);
+        this.tilingGen = this.getTilingGen(methodPicker.value);
 
         const axisCanvas = document.getElementById('axisRosette');
         this.axisControls = new AxisControls(axisCanvas, this, dims);
@@ -238,9 +247,9 @@ class TilingApp {
 
         const resetBtn = document.getElementById('reset');
         resetBtn.addEventListener('click', () => {
-            this.tiling.resetBasis();
+            this.state.resetBasis();
             this.updateAxisControls();
-            this.paramsChanged();
+            this.redraw();
         });
 
         this.initColorControls(dims);
@@ -303,18 +312,18 @@ class TilingApp {
 
         this.draw();
         this.needsRedraw = false;
-        this.needsNewParams = false;
     }
 
-    createTiling(method, dims) {
-        const viewWidth = this.tilingView.canvas.width / this.tilingView.scale;
-        const viewHeight = this.tilingView.canvas.height / this.tilingView.scale;
+    getTilingGen(method) {
         if (method === 'project') {
-            return new Tiling(dims, viewWidth, viewHeight);
+            return generateCutProj;
         } else if (method === 'multigrid') {
-            return new Tiling2(dims, viewWidth, viewHeight);
+            return generateMultigrid;
         } else if (method == 'wasm') {
-            return new TilingWasm(dims, viewWidth, viewHeight);
+            return generateWasm;
+        } else {
+            console.error("unknown tiling generator type:", method);
+            return generateMultigrid;
         }
     }
 
@@ -335,7 +344,7 @@ class TilingApp {
                 ctl.type = 'color';
                 ctl.value = this.tilingView.colors[colorIxHere];
                 ctl.style.width = widthStyle;
-                ctl.addEventListener('input', (event) => {
+                ctl.addEventListener('input', () => {
                     this.tilingView.colors[colorIxHere] = ctl.value;
                     this.redraw();
                 });
@@ -351,7 +360,8 @@ class TilingApp {
     }
 
     draw() {
-        this.tilingView.draw(this.tiling.faces);
+        const faces = this.tilingGen(this.state, this.tilingView.viewWidth, this.tilingView.viewHeight);
+        this.tilingView.draw(faces);
         this.axisControls.draw();
     }
 
@@ -359,101 +369,84 @@ class TilingApp {
         if (this.needsRedraw) return;
         this.needsRedraw = true;
         window.requestAnimationFrame(() => {
-            if (this.needsNewParams) {
-                this.needsNewParams = false;
-                this.tiling.newParams();
-            }
             this.needsRedraw = false;
             this.draw();
         });
     }
 
-    paramsChanged() {
-        if (this.needsNewParams) return;
-        this.needsNewParams = true;
-        this.redraw();
-    }
-
-    setViewSize(width, height, scale) {
-        this.tiling.viewWidth = width / scale;
-        this.tiling.viewHeight = height / scale;
-        this.paramsChanged();
-    }
-
     updateAxisControls() {
         // Move axis controls to match the basis vectors.
-        const basis = this.tiling.basis;
         this.axisControls.ctls.forEach((ctl, i) => {
-            ctl.x = basis[0][i];
-            ctl.y = basis[1][i];
+            ctl.x = this.state.basis[0][i];
+            ctl.y = this.state.basis[1][i];
         });
     }
 
     axisChanged(changeAxis, x, y) {
-        this.tiling.moveAxis(changeAxis, x, y);
+        this.state.moveAxis(changeAxis, x, y);
         this.updateAxisControls();
-        this.paramsChanged();
+        this.redraw();
     }
 
     updateOffsetControls() {
-        this.tiling.offset.forEach((offset, i) => {
+        this.state.offset.forEach((offset, i) => {
             this.offsetControls.setOffset(i, offset);
         });
     }
 
     offsetChanged(i, value) {
-        this.tiling.setOffsetComp(i, value);
-        this.paramsChanged();
+        this.state.offset[i] = value;
+        this.redraw();
     }
 
     translateOffset(dx, dy) {
-        this.tiling.translateOffset(dx, dy);
+        this.state.translateOffset(dx, dy);
         this.updateOffsetControls();
-        this.paramsChanged();
+        this.redraw();
     }
 
     getState() {
         return {
-            dims: this.tiling.dims,
-            basis: this.tiling.basis,
-            offset: this.tiling.offset,
+            dims: this.state.dims,
+            basis: this.state.basis,
+            offset: this.state.offset,
             lineColor: this.tilingView.lineColor,
             colors: this.tilingView.colors,
         };
     }
 
     setState(state) {
-        this.tiling.dims = state.dims || 5;
+        this.state.dims = state.dims || 5;
         const numAxes = document.getElementById('numAxes');
-        numAxes.value = this.tiling.dims;
+        numAxes.value = this.state.dims;
 
         if (state.basis !== undefined) {
-            this.tiling.basis = state.basis;
+            this.state.basis = state.basis;
         } else {
-            this.tiling.resetBasis();
+            this.state.resetBasis();
         }
         if (state.offset !== undefined) {
-            this.tiling.offset = state.offset;
+            this.state.offset = state.offset;
         } else {
-            this.tiling.resetOffset();
+            this.state.resetOffset();
         }
         this.tilingView.lineColor = state.lineColor || LINE_COLOR;
         if (state.colors !== undefined) {
             this.tilingView.colors = state.colors;
         } else {
-            this.tilingView.initColors(this.tiling.dims);
+            this.tilingView.initColors(this.state.dims);
         }
 
-        this.axisControls.setNumAxes(this.tiling.dims);
+        this.axisControls.setNumAxes(this.state.dims);
         this.updateAxisControls();
 
-        this.offsetControls.setNumAxes(this.tiling.dims);
+        this.offsetControls.setNumAxes(this.state.dims);
         this.updateOffsetControls();
 
         this.removeColorControls();
-        this.initColorControls(this.tiling.dims);
+        this.initColorControls(this.state.dims);
 
-        this.paramsChanged();
+        this.redraw();
     }
 
     startAnimation() {
@@ -471,12 +464,9 @@ class TilingApp {
         const dt = (this.animTime >= 0) ? timestamp - this.animTime : 0;
         this.animTime = timestamp;
         const theta = 2*Math.PI / 3e4 * dt;
-        const basis = this.tiling.basis;
-        Vec.rotate(basis[0], 0, 1, theta);
-        Vec.rotate(basis[1], 0, 1, theta);
-        this.tiling.basis = basis;
+        Vec.rotate(this.state.basis[0], 0, 1, theta);
+        Vec.rotate(this.state.basis[1], 0, 1, theta);
         this.updateAxisControls();
-        this.tiling.newParams();
         this.draw();
         window.requestAnimationFrame((t) => this.animate(t));
     }
@@ -552,8 +542,8 @@ function init() {
     }
 }
 
-if (document.readyState === "complete" || document.readyState === "loaded") {
-    init();
-} else {
+if (document.readyState === "loading") {
     document.addEventListener('DOMContentLoaded', () => init);
+} else {
+    init();
 }
