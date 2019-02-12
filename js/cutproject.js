@@ -10,27 +10,11 @@ const GRID_SCALE_MAX = 290;
 const GRID_LINE_W = 2/GRID_SCALE;
 const LINE_COLOR = '#000000';
 
-class TilingView {
-    constructor(canvas, app, dims) {
-        this.canvas = canvas;
-        this.app = app;
-        this.tracking = null;
-        this.scale = GRID_SCALE;
-        this.lineColor = LINE_COLOR;
+class TilingViewState extends TilingState {
+    constructor(dims) {
+        super(dims);
         this.initColors(dims);
-
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
-        this.calcViewSize();
-
-        canvas.addEventListener('mousedown', this, false);
-        canvas.addEventListener('mousemove', this, false);
-        canvas.addEventListener('mouseup', this, false);
-        canvas.addEventListener('touchstart', this, false);
-        canvas.addEventListener('touchmove', this, false);
-        canvas.addEventListener('touchend', this, false);
-        canvas.addEventListener('wheel', this, {passive: true});
-        window.addEventListener('resize', this, false);
+        this.lineColor = LINE_COLOR;
     }
 
     initColors(dims) {
@@ -53,7 +37,62 @@ class TilingView {
         }
     }
 
-    draw(faces) {
+    genStateCode(contF) {
+        const blob = encodeState(this);
+        const reader = new FileReader();
+        reader.addEventListener("loadend", () => {
+            const code = reader.result.split(',')[1];
+            console.log('generated state code:', code);
+            contF(code);
+        }, false);
+        reader.readAsDataURL(blob);
+    }
+}
+
+function loadStateCode(stateCode, contF) {
+    const blob = base64ToBlob(stateCode);
+    const reader = new FileReader();
+    reader.addEventListener("loadend", () => {
+        const st = decodeState(reader.result);
+        if (st) {
+            const state = new TilingViewState(st.dims);
+            state.basis = st.basis;
+            state.offset = st.offset;
+            state.colors = st.colors;
+            state.lineColor = st.lineColor;
+            state.validate();
+            contF(state);
+        } else {
+            console.error('Failed decoding state code.');
+        }
+    }, false);
+    reader.readAsArrayBuffer(blob);
+}
+
+class TilingView {
+    constructor(canvas, app) {
+        this.canvas = canvas;
+        this.app = app;
+        this.tracking = null;
+        this.scale = GRID_SCALE;
+
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        this.calcViewSize();
+
+        canvas.addEventListener('mousedown', this, false);
+        canvas.addEventListener('mousemove', this, false);
+        canvas.addEventListener('mouseup', this, false);
+        canvas.addEventListener('touchstart', this, false);
+        canvas.addEventListener('touchmove', this, false);
+        canvas.addEventListener('touchend', this, false);
+        canvas.addEventListener('wheel', this, {passive: true});
+        window.addEventListener('resize', this, false);
+    }
+
+    draw(state, tilingGen) {
+        const faces = tilingGen(state, this.viewWidth, this.viewHeight);
+
         const ctx = this.canvas.getContext('2d');
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -63,9 +102,9 @@ class TilingView {
 
         ctx.lineWidth = GRID_LINE_W;
         ctx.lineJoin = 'bevel';
-        ctx.strokeStyle = this.lineColor;
+        ctx.strokeStyle = state.lineColor;
         faces.forEach((f) => {
-            ctx.fillStyle = this.colors[f.type];
+            ctx.fillStyle = state.colors[f.type];
             ctx.beginPath();
             ctx.moveTo(f.verts[0][0], f.verts[0][1]);
             ctx.lineTo(f.verts[1][0], f.verts[1][1]);
@@ -201,12 +240,12 @@ class TilingView {
             this.scale = Math.min(GRID_SCALE_MAX, Math.ceil(this.scale * dzoom));
         } else if (dzoom < 1) {
             this.scale = Math.max(GRID_SCALE_MIN, Math.floor(this.scale * dzoom));
-        }    
+        }
         if (this.scale !== oldScale) {
             this.calcViewSize();
             this.app.redraw();
-        }    
-    }    
+        }
+    }
 
     resize() {
         this.canvas.width = this.canvas.clientWidth;
@@ -219,14 +258,14 @@ class TilingView {
 class TilingApp {
     constructor() {
         const numAxes = document.getElementById('numAxes');
-        const dims = parseInt(numAxes.value, 10);
         numAxes.addEventListener('change', () => {
-            this.setState({ dims: parseInt(numAxes.value, 10) });
+            this.setState(new TilingViewState(parseInt(numAxes.value, 10)));
         });
-        this.state = new TilingState(dims);
+        const dims = parseInt(numAxes.value, 10);
+        this.state = new TilingViewState(dims);
 
         const canvas = document.getElementById('main');
-        this.tilingView = new TilingView(canvas, this, dims);
+        this.tilingView = new TilingView(canvas, this);
 
         const methodPicker = document.getElementById('tileGen');
         methodPicker.addEventListener('change', () => {
@@ -274,7 +313,7 @@ class TilingApp {
 
         const saveBtn = document.getElementById('save');
         saveBtn.addEventListener('click', () => {
-            this.genStateCode((code) => {
+            this.state.genStateCode((code) => {
                 const codeCode = document.getElementById('codeCode');
                 codeCode.innerHTML = code;
                 window.getSelection().selectAllChildren(codeCode);
@@ -295,7 +334,7 @@ class TilingApp {
         codeInput.addEventListener('change', () => {
             console.log('loading state code:', codeInput.value);
             codeInput.blur();
-            this.loadStateCode(codeInput.value);
+            loadStateCode(codeInput.value, (st) => this.setState(st));
         });
         codeInput.addEventListener('blur', () => {
             const codeLoad = document.getElementById('codeLoad');
@@ -342,10 +381,10 @@ class TilingApp {
                 const colorIxHere = colorIx++;
                 const ctl = document.createElement('input');
                 ctl.type = 'color';
-                ctl.value = this.tilingView.colors[colorIxHere];
+                ctl.value = this.state.colors[colorIxHere];
                 ctl.style.width = widthStyle;
                 ctl.addEventListener('input', () => {
-                    this.tilingView.colors[colorIxHere] = ctl.value;
+                    this.state.colors[colorIxHere] = ctl.value;
                     this.redraw();
                 });
                 rowDiv.prepend(ctl);
@@ -360,8 +399,7 @@ class TilingApp {
     }
 
     draw() {
-        const faces = this.tilingGen(this.state, this.tilingView.viewWidth, this.tilingView.viewHeight);
-        this.tilingView.draw(faces);
+        this.tilingView.draw(this.state, this.tilingGen);
         this.axisControls.draw();
     }
 
@@ -405,38 +443,10 @@ class TilingApp {
         this.redraw();
     }
 
-    getState() {
-        return {
-            dims: this.state.dims,
-            basis: this.state.basis,
-            offset: this.state.offset,
-            lineColor: this.tilingView.lineColor,
-            colors: this.tilingView.colors,
-        };
-    }
-
     setState(state) {
-        this.state.dims = state.dims || 5;
-        const numAxes = document.getElementById('numAxes');
-        numAxes.value = this.state.dims;
+        this.state = state;
 
-        if (state.basis !== undefined) {
-            this.state.basis = state.basis;
-        } else {
-            this.state.resetBasis();
-        }
-        if (state.offset !== undefined) {
-            this.state.offset = state.offset;
-        } else {
-            this.state.resetOffset();
-        }
-        this.tilingView.lineColor = state.lineColor || LINE_COLOR;
-        if (state.colors !== undefined) {
-            this.tilingView.colors = state.colors;
-        } else {
-            this.tilingView.initColors(this.state.dims);
-        }
-
+        document.getElementById('numAxes').value = this.state.dims;
         this.axisControls.setNumAxes(this.state.dims);
         this.updateAxisControls();
 
@@ -470,33 +480,6 @@ class TilingApp {
         this.draw();
         window.requestAnimationFrame((t) => this.animate(t));
     }
-
-    genStateCode(contF) {
-        const state = this.getState();
-        const blob = encodeState(state);
-        const reader = new FileReader();
-        reader.addEventListener("loadend", () => {
-            const code = reader.result.split(',')[1];
-            console.log('generated state code:', code);
-            contF(code);
-        }, false);
-        reader.readAsDataURL(blob);
-    }
-
-    loadStateCode(stateCode) {
-        const blob = base64ToBlob(stateCode);
-        const reader = new FileReader();
-        reader.addEventListener("loadend", () => {
-            const state = decodeState(reader.result);
-            if (state) {
-                cleanState(state);
-                this.setState(state);
-            } else {
-                console.error('Failed decoding state code.');
-            }
-        }, false);
-        reader.readAsArrayBuffer(blob);
-    }
 }
 
 function attachToggle(toggleID, panelID) {
@@ -512,25 +495,6 @@ function attachToggle(toggleID, panelID) {
     });
 }
 
-// Enforce some of the invariants that we want states to hold,
-// for states that have been deserialized from a state code.
-function cleanState(state) {
-    // Ensure the basis vectors are unit length and orthogonal.
-    Vec.normalize(state.basis[0]);
-    state.basis[1] = Vec.makeOrtho(state.basis[1], state.basis[0]);
-    Vec.normalize(state.basis[1]);
-    if (Vec.norm(state.basis[0]) === 0 || Vec.norm(state.basis[1]) === 0) {
-        // If either vector ended up zero, the basis was invalid; just remove it.
-        // A new basis will be created by TilingApp.setState().
-        delete state.basis;
-    }
-
-    // Ensure the offsets are clamped to [0,1].
-    for (let i = 0; i < state.dims; i++) {
-        state.offset[i] = Math.max(0, Math.min(1, state.offset[i]));
-    }
-}
-
 function init() {
     const app = new TilingApp();
 
@@ -538,7 +502,7 @@ function init() {
     if (params.has('a')) {
         const stateCode = params.get('a').replace(/ /g, '+');
         console.log('initialising from state code:', stateCode);
-        app.loadStateCode(stateCode);
+        loadStateCode(stateCode, (st) => app.setState(st));
     }
 }
 

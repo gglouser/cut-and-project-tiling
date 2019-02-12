@@ -90,6 +90,24 @@ export class TilingState {
 
         // this.basisTest();
     }
+
+    // Enforce tiling state invariants.
+    validate() {
+        // Ensure the basis vectors are unit length and orthogonal.
+        Vec.normalize(this.basis[0]);
+        this.basis[1] = Vec.makeOrtho(this.basis[1], this.basis[0]);
+        Vec.normalize(this.basis[1]);
+        if (Vec.norm(this.basis[0]) === 0 || Vec.norm(this.basis[1]) === 0) {
+            // If either vector ended up zero, the basis was invalid.
+            // Reset it.
+            this.resetBasis();
+        }
+
+        // Ensure the offsets are clamped to [0,1].
+        for (let i = 0; i < this.dims; i++) {
+            this.offset[i] = Math.max(0, Math.min(1, this.offset[i]));
+        }
+    }
 }
 
 class VertexCache {
