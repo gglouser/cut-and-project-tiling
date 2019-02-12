@@ -1,5 +1,6 @@
 use std::f64::EPSILON;
 use std::f64::consts::FRAC_1_SQRT_2;
+use num_traits::ops::mul_add::MulAdd;
 use vectors::Dot;
 use vectors::dense::heap::DenseVector;
 use wasm_bindgen::prelude::*;
@@ -40,9 +41,9 @@ impl State {
 
     // Take a point on the view plane to the corresponding point in space.
     fn unproject(&self, (x,y): PPoint) -> DenseVector<f64> {
-        self.basis[0].clone() * x
-            + self.basis[1].clone() * y
-            + &self.offset
+        self.basis[0].clone().mul_add(x,
+            self.basis[1].clone().mul_add(y,
+                &self.offset))
     }
 
     // Find the range of grid lines for each axis.
@@ -66,12 +67,10 @@ impl State {
 
     fn get_face_vertex(&self, i: usize, j: usize, ki: f64, kj: f64) -> DenseVector<f64> {
         // Find the intersection (a,b) of the grid lines ki and kj.
-        let a = ((ki + 0.5 - self.offvec[i])*self.axis[j].1
-            - (kj + 0.5 - self.offvec[j])*self.axis[i].1)
-            / self.ext_prod[i][j];
-        let b = ((kj + 0.5 - self.offvec[j])*self.axis[i].0
-            - (ki + 0.5 - self.offvec[i])*self.axis[j].0)
-            / self.ext_prod[i][j];
+        let u = ki + 0.5 - self.offvec[i];
+        let v = kj + 0.5 - self.offvec[j];
+        let a = (u*self.axis[j].1 - v*self.axis[i].1) / self.ext_prod[i][j];
+        let b = (v*self.axis[i].0 - u*self.axis[j].0) / self.ext_prod[i][j];
 
         // Find the coordinates of the key vertex for the face
         // corresponding to this intersection.
@@ -92,7 +91,6 @@ impl State {
                     if self.axis[ix].0*self.axis[i].0 + self.axis[ix].1*self.axis[i].1 > 0.0 && ix < i {
                         return x.ceil();
                     }
-                    return x.floor();
                 } else if self.ext_prod[ix][j].abs() < EPSILON {
                     // Axis j and ix are parallel. Shift the tile in the
                     // ix direction if they point the same direction
@@ -100,7 +98,6 @@ impl State {
                     if self.axis[ix].0*self.axis[j].0 + self.axis[ix].1*self.axis[j].1 > 0.0 && ix < j {
                         return x.ceil();
                     }
-                    return x.floor();
                 } else if self.ext_prod[i][j]*self.ext_prod[i][ix] > 0.0
                             && self.ext_prod[i][j]*self.ext_prod[ix][j] > 0.0 {
                     // Axis ix lies between axis i and axis j. Shift the tile
@@ -163,7 +160,7 @@ pub fn generate(
 
             for ki in grid_min[i]..grid_max[i] {
                 for kj in grid_min[j]..grid_max[j] {
-                    let face_vert = state.get_face_vertex(i, j, ki as f64, kj as f64);
+                    let face_vert = state.get_face_vertex(i, j, f64::from(ki), f64::from(kj));
                     let f1 = state.project(face_vert);
 
                     let mid_x = f1.0 + (state.axis[i].0 + state.axis[j].0)/2.0;

@@ -369,8 +369,10 @@ export function generateMultigrid(state, viewWidth, viewHeight) {
 
 function getFaceVertex(i, j, ki, kj, state, axis, extProd) {
     // Find the intersection (a,b) of the grid lines ki and kj.
-    const a = ((ki+0.5-state.offset[i])*axis[j][1] - (kj+0.5-state.offset[j])*axis[i][1]) / extProd[i][j];
-    const b = ((kj+0.5-state.offset[j])*axis[i][0] - (ki+0.5-state.offset[i])*axis[j][0]) / extProd[i][j];
+    const u = ki + 0.5 - state.offset[i];
+    const v = kj + 0.5 - state.offset[j];
+    const a = (u*axis[j][1] - v*axis[i][1]) / extProd[i][j];
+    const b = (v*axis[i][0] - u*axis[j][0]) / extProd[i][j];
 
     // Find the coordinates of the key vertex for the face
     // corresponding to this intersection.
@@ -391,7 +393,6 @@ function getFaceVertex(i, j, ki, kj, state, axis, extProd) {
                 if (Vec.dot(axis[ix], axis[i]) > 0 && ix < i) {
                     return Math.ceil(x);
                 }
-                return Math.floor(x);
             } else if (Math.abs(extProd[ix][j]) < Number.EPSILON) {
                 // Axis j and ix are parallel. Shift the tile in the
                 // ix direction if they point the same direction
@@ -399,7 +400,6 @@ function getFaceVertex(i, j, ki, kj, state, axis, extProd) {
                 if (Vec.dot(axis[ix], axis[j]) > 0 && ix < j) {
                     return Math.ceil(x);
                 }
-                return Math.floor(x);
             } else if (extProd[i][j]*extProd[i][ix] > 0
                         && extProd[i][j]*extProd[ix][j] > 0) {
                 // Axis ix lies between axis i and axis j. Shift the tile

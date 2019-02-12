@@ -4,6 +4,7 @@ extern crate cfg_if;
 extern crate wasm_bindgen;
 use wasm_bindgen::prelude::*;
 
+extern crate num_traits;
 extern crate vectors;
 
 cfg_if! {
