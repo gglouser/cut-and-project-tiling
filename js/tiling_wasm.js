@@ -23,6 +23,8 @@ export function generateWasm(state, viewWidth, viewHeight) {
             ],
             type: face.face_type,
         });
+        face.free();
     }
+    faceList.free();
     return faces;
 }
