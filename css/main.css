@@ -1,0 +1,107 @@
+#main {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 100%;
+    touch-action: none;
+}
+#controls {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-color: white;
+    width: 180px;
+    max-height: 100%;
+    overflow: auto;
+    border: solid;
+    cursor: default;
+}
+#axisRosette {
+    display: block;
+    height: 180px;
+    width: 180px;
+    touch-action: none;
+}
+#offsetControls>div {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+#offsetControls input {
+    flex-grow: 1;
+}
+.offset-label {
+    font-size: 10pt;
+}
+#colorControls input {
+    border: 0;
+    padding: 0;
+}
+#axesExtra {
+    display: flex;
+}
+#numAxesLabel {
+    padding: 0 5px 0 2px;
+}
+#reset {
+    flex-grow: 1;
+}
+.toggle {
+    font-family: sans-serif;
+    font-variant: small-caps;
+    font-weight: bold;
+    background-color: #cccccc;
+    padding: 3px;
+}
+.toggle:hover, .active {
+    background-color: #ccddff;
+}
+.toggle:after {
+    content: '\FF0B'; /* Unicode fullwidth plus sign */
+    float: right;
+}
+.active:after {
+    content: '\FF0D'; /* Unicode fullwidth hyphen-minus */
+}
+#about i {
+    font-size: smaller;
+}
+#about ul {
+    margin: 0px;
+    padding-inline-start: 20px;
+}
+#about input {
+    width: 100%;
+}
+#codeShow {
+    position: absolute;
+    top: -200px;
+    left: 200px;
+    padding: 5px;
+    background-color: #eeeeee;
+    border: solid;
+    transition: 0.3s all;
+}
+#codeShow.codeActive, #codeLoad.codeActive {
+    top: 10px;
+}
+#codeCode {
+    display: inline-block;
+    max-width: 400px;
+    word-break: break-all;
+    font-family: sans-serif;
+    padding: 3px;
+    background-color: white;
+    border: 1px solid lightgrey;
+}
+#codeLoad {
+    position: absolute;
+    top: -100px;
+    left: 200px;
+    padding: 5px;
+    background-color: #eeeeee;
+    border: solid;
+    transition: 0.3s all;
+}

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Cut and Project Tiling</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="css/main.css">
+    <script type="module" src="bundle.js"></script>
+  </head>
+  <body>
+    <canvas id="main">This applet requires the canvas, which your browser does not support.</canvas>
+    <div id="controls">
+      <div id="aboutToggle" class="toggle">About</div>
+      <div id="about">
+        <b>Cut and Project Tiling</b><br>
+        <i>by Grant Glouser</i><br>
+        <ul>
+          <li><a href="docs/intro.html">What is this?</a></li>
+          <li><a href="docs/gallery.html">See some examples</a></li>
+          <li><a href="https://github.com/gglouser/cut-and-project-tiling">GitHub project page</a></li>
+        </ul>
+        <input type="button" id="save" value="Share tiling"><br>
+        <input type="button" id="load" value="Enter tiling code"><br>
+        <input type="button" id="animate" value="Animate">
+        Tiling method:
+        <select id="tileGen">
+          <option value="project">Cut and project</option>
+          <option value="multigrid">Multigrid</option>
+          <option value="wasm" selected>Multigrid (wasm)</option>
+        </select>
+      </div>
+      <div id="axisToggle" class="toggle active">Axis Controls</div>
+      <div id="axisControls">
+        <canvas id="axisRosette"></canvas>
+        <div id="axesExtra">
+          <select id="numAxes">
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+          </select>
+          <span id="numAxesLabel">axes</span>
+          <input type="button" id="reset" value="Reset Axes">
+        </div>
+      </div>
+      <div id="offsetToggle" class="toggle">Offsets</div>
+      <div id="offsetControls"></div>
+      <div id="colorToggle" class="toggle">Colors</div>
+      <div id="colorControls"></div>
+    </div>
+    <div id="codeShow">
+      <div>Copy the tiling code below or use <a id="codeLink">this link</a>.</div>
+      <div id="codeCode">xyz</div>
+      <div>
+        <input type="button" id="codeDone" value="Done">
+      </div>
+    </div>
+    <div id="codeLoad">
+      Enter a tiling code:
+      <input type="text" id="codeInput">
+    </div>
+  </body>
+</html>
