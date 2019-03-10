@@ -19,6 +19,7 @@ class TilingApp {
         const methodPicker = document.getElementById('tileGen');
         methodPicker.addEventListener('change', () => {
             this.tilingGen = this.getTilingGen(methodPicker.value);
+            this.redraw();
         });
         this.tilingGen = this.getTilingGen(methodPicker.value);
 
