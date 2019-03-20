@@ -1,11 +1,5 @@
-#[macro_use]
-extern crate cfg_if;
-
-extern crate wasm_bindgen;
+use cfg_if::cfg_if;
 use wasm_bindgen::prelude::*;
-
-extern crate num_traits;
-extern crate vectors;
 
 cfg_if! {
     // When the `console_error_panic_hook` feature is enabled, we can call the
