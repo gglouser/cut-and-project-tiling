@@ -15,13 +15,9 @@ export function generateWasm(state, viewWidth, viewHeight) {
     for (let i = 0; i < numFaces; i++) {
         const face = faceList.get_face(i);
         faces.push({
-            verts: [
-                [face.vert0x, face.vert0y],
-                [face.vert1x, face.vert1y],
-                [face.vert2x, face.vert2y],
-                [face.vert3x, face.vert3y],
-            ],
-            type: face.face_type,
+            keyVert: [face.key_vert_x, face.key_vert_y],
+            axis1: face.axis1,
+            axis2: face.axis2,
         });
         face.free();
     }

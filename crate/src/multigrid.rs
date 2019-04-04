@@ -146,7 +146,6 @@ pub fn generate(
     let hbound = view_width/2.0 + FRAC_1_SQRT_2;
     let vbound = view_height/2.0 + FRAC_1_SQRT_2;
     let (grid_min, grid_max) = state.get_grid_ranges(hbound, vbound);
-    let face_types = get_face_types(dims);
 
     let mut faces = Vec::new();
     for i in 0..dims - 1 {
@@ -169,36 +168,15 @@ pub fn generate(
                         continue;
                     }
 
-                    let f2 = (f1.0 + state.axis[i].0, f1.1 + state.axis[i].1);
-                    let f3 = (f2.0 + state.axis[j].0, f2.1 + state.axis[j].1);
-                    let f4 = (f1.0 + state.axis[j].0, f1.1 + state.axis[j].1);
                     faces.push( Face {
-                        vert0x: f1.0,
-                        vert0y: f1.1,
-                        vert1x: f2.0,
-                        vert1y: f2.1,
-                        vert2x: f3.0,
-                        vert2y: f3.1,
-                        vert3x: f4.0,
-                        vert3y: f4.1,
-                        face_type: face_types[i][j],
+                        key_vert_x: f1.0,
+                        key_vert_y: f1.1,
+                        axis1: i as u16,
+                        axis2: j as u16,
                     });
                 }
             }
         }
     }
     FaceList { faces }
-}
-
-fn get_face_types(dims: usize) -> Vec<Vec<u16>> {
-    let mut face_types = vec![vec![0; dims]; dims];
-    let mut type_index = 0;
-    for i in 0..dims-1 {
-        for j in i+1..dims {
-            face_types[i][j] = type_index;
-            face_types[j][i] = type_index;
-            type_index += 1;
-        }
-    }
-    face_types
 }

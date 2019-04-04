@@ -28,15 +28,10 @@ pub mod multigrid;
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct Face {
-    pub vert0x: f64,
-    pub vert0y: f64,
-    pub vert1x: f64,
-    pub vert1y: f64,
-    pub vert2x: f64,
-    pub vert2y: f64,
-    pub vert3x: f64,
-    pub vert3y: f64,
-    pub face_type: u16,
+    pub key_vert_x: f64,
+    pub key_vert_y: f64,
+    pub axis1: u16,
+    pub axis2: u16,
 }
 
 #[wasm_bindgen]

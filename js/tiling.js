@@ -190,7 +190,6 @@ export function generateCutProj(state, viewWidth, viewHeight) {
     // Find edges and faces.
     // const edges = [];
     const faces = [];
-    const faceTypes = getFaceTypes(state.dims);
     vertices.forEach((v) => {
         for (let i = 0; i < state.dims; i++) {
             const n1 = vertexCache.getNeighbor(v, i, 1);
@@ -201,13 +200,9 @@ export function generateCutProj(state, viewWidth, viewHeight) {
                     const n3 = vertexCache.getNeighbor(n1, j, 1);
                     if (n2.inCut && n3.inCut) {
                         faces.push({
-                            verts: [
-                                v.pcoord,
-                                n1.pcoord,
-                                n3.pcoord,
-                                n2.pcoord,
-                                ],
-                            type: faceTypes[i][j],
+                            keyVert: v.pcoord,
+                            axis1: i,
+                            axis2: j,
                         });
                     }
                 }
@@ -316,7 +311,7 @@ function hypercubeVertices(n) {
     return vs;
 }
 
-function getFaceTypes(dims) {
+export function getFaceTypes(dims) {
     const faceType = [];
     for (let i = 0; i < dims; i++) {
         faceType.push([]);
@@ -346,7 +341,6 @@ export function generateMultigrid(state, viewWidth, viewHeight) {
     const hbound = viewWidth/2 + Math.SQRT1_2;
     const vbound = viewHeight/2 + Math.SQRT1_2;
     const grid = getGridRanges(state, hbound, vbound);
-    const faceTypes = getFaceTypes(state.dims);
 
     const faces = [];
     for (let i = 0; i < state.dims-1; i++) {
@@ -369,14 +363,10 @@ export function generateMultigrid(state, viewWidth, viewHeight) {
                         continue;
                     }
 
-                    const f2 = Vec.add(f1, axis[i]);
-                    const f3 = Vec.add(f2, axis[j]);
-                    const f4 = Vec.add(f1, axis[j]);
                     faces.push({
-                        verts: [f1, f2, f3, f4],
-                        a1: i,
-                        a2: j,
-                        type: faceTypes[i][j],
+                        keyVert: f1,
+                        axis1: i,
+                        axis2: j,
                     });
                 }
             }
