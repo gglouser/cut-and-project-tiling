@@ -301,14 +301,17 @@ class RendererGL {
     initShaders() {
         // Vertex shader program
         const vsSource = `
+            const int MAX_DIMS = 7;
+            const int NUM_COLORS = 21;
+
             attribute vec2 aVertexPosition;
             attribute float aVertexColor;
             attribute vec2 aFaceAxis;
             attribute vec2 aFacePosition;
 
             uniform vec2 uScalingFactor;
-            uniform vec2 uAxis[7];
-            uniform vec3 uColors[21];
+            uniform vec2 uAxis[MAX_DIMS];
+            uniform vec3 uColors[NUM_COLORS];
 
             varying lowp vec3 vColor;
 
@@ -318,10 +321,16 @@ class RendererGL {
                 gl_Position = vec4(v * uScalingFactor, 0.0, 1.0);
 
                 int color_id = int(aVertexColor);
-                if (color_id >= 21) {
-                    color_id = 0;
+                if (color_id >= NUM_COLORS) {
+                        color_id = 0;
                 }
                 vColor = uColors[color_id];
+
+                // vec2 midp = aFacePosition + face_basis * vec2(0.5, 0.5);
+                // vColor = vec3(0.5 + cos(midp.x)/2.0, 0.0, 0.5 + cos(midp.y)/2.0);
+ 
+                // vec2 inv = aFacePosition + face_basis * (vec2(1.0, 1.0) - aVertexPosition);
+                // vColor = vec3(0.5 + cos(inv.x)/4.0, 0.0, 0.75 + cos(inv.y)/4.0);
             }
         `;
 
@@ -405,85 +414,129 @@ function loadShader(gl, type, source) {
     return shader;
 }
 
+class GLAttributeBuffer {
+    constructor(gl, numElems, numComponents) {
+        this.gl = gl;
+        this.numComponents = numComponents;
+        this.type = gl.FLOAT;
+        this.normalize = false;
+        this.stride = 0;
+        this.offset = 0;
+        this.buffer = gl.createBuffer();
+        this.array = new Float32Array(numElems * numComponents);
+        this.ix = 0;
+    }
+
+    bufferData() {
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, this.array, this.gl.STATIC_DRAW);
+    }
+
+    enable(attribLoc) {
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffer);
+        this.gl.vertexAttribPointer(
+            attribLoc,
+            this.numComponents,
+            this.type,
+            this.normalize,
+            this.stride,
+            this.offset);
+        this.gl.enableVertexAttribArray(attribLoc);
+    }
+
+    push(value) {
+        if (this.ix < this.array.length) {
+            this.array[this.ix++] = value;
+        }
+    }
+}
+
+function getInsets(state, lineWidth) {
+    const insets = [];
+    for (let i = 0; i < state.dims; i++) {
+        insets.push([]);
+    }
+
+    for (let i = 0; i < state.dims; i++) {
+        const s0 = state.basis[0][i];
+        const s1 = state.basis[1][i];
+        for (let j = 0; j < state.dims; j++) {
+            if (i === j) {
+                insets[i][j] = 0;
+            } else {
+                const t0 = state.basis[0][j];
+                const t1 = state.basis[1][j];
+                insets[i][j] = lineWidth * Math.hypot(t0, t1) / Math.abs(s0*t1 - s1*t0);
+            }
+        }
+    }
+    return insets;
+}
+
 function initBuffers(gl, state, faces) {
     const vertexPerFace = 6;
     const vertexCount = vertexPerFace * faces.length;
 
-    // Create array of vertex positions for the faces.
-    const positions = new Float32Array(2 * vertexCount);
     const lineWidth = GRID_LINE_W/2;
-    faces.forEach((f, i) => {
-        const s = [state.basis[0][f.axis1], state.basis[1][f.axis1]];
-        const t = [state.basis[0][f.axis2], state.basis[1][f.axis2]];
-        const lw1 = lineWidth * Math.hypot(t[0], t[1]) / Math.abs(s[0]*t[1] - s[1]*t[0]);
-        const lw2 = lineWidth * Math.hypot(s[0], s[1]) / Math.abs(s[0]*t[1] - s[1]*t[0]);
+    // const lineWidth = 0.0;
+    const insets = getInsets(state, lineWidth);
 
-        const ii = 2*vertexPerFace*i;
-        positions[ii]   = 0 + lw1;
-        positions[ii+1] = 0 + lw2;
-        positions[ii+2] = 1 - lw1;
-        positions[ii+3] = 0 + lw2;
-        positions[ii+4] = 1 - lw1;
-        positions[ii+5] = 1 - lw2;
-        positions[ii+6] = 0 + lw1;
-        positions[ii+7] = 0 + lw2;
-        positions[ii+8] = 1 - lw1;
-        positions[ii+9] = 1 - lw2;
-        positions[ii+10] = 0 + lw1;
-        positions[ii+11] = 1 - lw2;
+    // Create array of vertex positions for the faces.
+    const vertexPosition = new GLAttributeBuffer(gl, vertexCount, 2);
+    faces.forEach((f) => {
+        const lw1 = insets[f.axis1][f.axis2];
+        const lw2 = insets[f.axis2][f.axis1];
+        vertexPosition.push(0 + lw1);
+        vertexPosition.push(0 + lw2);
+        vertexPosition.push(1 - lw1);
+        vertexPosition.push(0 + lw2);
+        vertexPosition.push(1 - lw1);
+        vertexPosition.push(1 - lw2);
+        vertexPosition.push(0 + lw1);
+        vertexPosition.push(0 + lw2);
+        vertexPosition.push(1 - lw1);
+        vertexPosition.push(1 - lw2);
+        vertexPosition.push(0 + lw1);
+        vertexPosition.push(1 - lw2);
     });
-
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+    vertexPosition.bufferData();
 
     // Create an array of colors for the faces.
     const faceTypes = getFaceTypes(state.dims);
-    const colors = new Float32Array(vertexCount);
-    faces.forEach((f, i) => {
+    const color = new GLAttributeBuffer(gl, vertexCount, 1);
+    faces.forEach((f) => {
         for (let j = 0; j < vertexPerFace; j++) {
-            colors[vertexPerFace*i + j] = faceTypes[f.axis1][f.axis2];
+            color.push(faceTypes[f.axis1][f.axis2]);
         }
     });
-
-    const colorBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+    color.bufferData();
 
     // Create an array for face axis indices.
-    const faceAxis = new Float32Array(2 * vertexCount);
-    faces.forEach((f, i) => {
+    const axis = new GLAttributeBuffer(gl, vertexCount, 2);
+    faces.forEach((f) => {
         for (let j = 0; j < vertexPerFace; j++) {
-            const ii = 2*(vertexPerFace*i + j);
-            faceAxis[ii]   = f.axis1;
-            faceAxis[ii+1] = f.axis2;
+            axis.push(f.axis1);
+            axis.push(f.axis2);
         }
     });
-
-    const axisBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, axisBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, faceAxis, gl.STATIC_DRAW);
+    axis.bufferData();
 
     // Create an array for face positions (key vertex).
-    const facePosition = new Float32Array(2 * vertexCount);
-    faces.forEach((f, i) => {
+    const facePos = new GLAttributeBuffer(gl, vertexCount, 2);
+    faces.forEach((f) => {
         for (let j = 0; j < vertexPerFace; j++) {
-            const ii = 2*(vertexPerFace*i + j);
-            facePosition[ii]   = f.keyVert[0];
-            facePosition[ii+1] = f.keyVert[1];
+            facePos.push(f.keyVert[0]);
+            facePos.push(f.keyVert[1]);
         }
     });
-
-    const facePosBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, facePosBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, facePosition, gl.STATIC_DRAW);
+    facePos.bufferData();
 
     return {
         vertexCount,
-        position: positionBuffer,
-        color: colorBuffer,
-        axis: axisBuffer,
-        facePos: facePosBuffer,
+        vertexPosition,
+        color,
+        axis,
+        facePos,
     };
 }
 
@@ -498,23 +551,6 @@ function splitColor(c) {
     return [0,0,0];
 }
 
-function enableBuffer(gl, buffer, attribLoc, numComponents) {
-    const type = gl.FLOAT;      // the data in the buffer is 32bit floats
-    const normalize = false;    // don't normalize
-    const stride = 0;           // how many bytes to get from one set of values to the next
-                                // 0 = use type and numComponents above
-    const offset = 0;           // how many bytes inside the buffer to start from
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.vertexAttribPointer(
-        attribLoc,
-        numComponents,
-        type,
-        normalize,
-        stride,
-        offset);
-    gl.enableVertexAttribArray(attribLoc);
-}
-
 // See: MDN WebGL tutorial, "Adding 2D content to a WebGL context"
 function drawScene(gl, programInfo, buffers, viewWidth, viewHeight, colors, axis) {
     // Set GL viewport. Do this every time because canvas can be resized.
@@ -527,10 +563,10 @@ function drawScene(gl, programInfo, buffers, viewWidth, viewHeight, colors, axis
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     // Tell WebGL how to pull out the attributes from the attribute buffers.
-    enableBuffer(gl, buffers.position, programInfo.attribLocations.vertexPosition, 2);
-    enableBuffer(gl, buffers.color, programInfo.attribLocations.vertexColor, 1);
-    enableBuffer(gl, buffers.axis, programInfo.attribLocations.faceAxis, 2);
-    enableBuffer(gl, buffers.facePos, programInfo.attribLocations.facePosition, 2);
+    buffers.vertexPosition.enable(programInfo.attribLocations.vertexPosition);
+    buffers.color.enable(programInfo.attribLocations.vertexColor);
+    buffers.axis.enable(programInfo.attribLocations.faceAxis);
+    buffers.facePos.enable(programInfo.attribLocations.facePosition);
 
     // Tell WebGL to use our program when drawing
     gl.useProgram(programInfo.program);
