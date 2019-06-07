@@ -467,6 +467,7 @@ function getInsets(state, lineWidth) {
                 const t0 = state.basis[0][j];
                 const t1 = state.basis[1][j];
                 insets[i][j] = lineWidth * Math.hypot(t0, t1) / Math.abs(s0*t1 - s1*t0);
+                insets[i][j] = Math.min(insets[i][j], 0.5);
             }
         }
     }
