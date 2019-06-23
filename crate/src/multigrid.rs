@@ -1,63 +1,54 @@
 use std::f64::EPSILON;
 use std::f64::consts::FRAC_1_SQRT_2;
-use num_traits::ops::mul_add::MulAdd;
-use vectors::Dot;
-use vectors::dense::heap::DenseVector;
+use nalgebra::{DVector, RowDVector, Vector2, MatrixMN, Dynamic, U2};
 use wasm_bindgen::prelude::*;
 
 use crate::{FaceList, Face, set_panic_hook};
 
-type PPoint = (f64, f64);
-
 struct State {
     dims: usize,
-    basis: [DenseVector<f64>; 2],
-    offset: DenseVector<f64>,
-    axis: Vec<PPoint>,
-    offvec: Vec<f64>,
+    basis: MatrixMN<f64, U2, Dynamic>,
+    offset: DVector<f64>,
     ext_prod: Vec<Vec<f64>>,
 }
 
 impl State {
     fn new(dims: usize, basis0: &[f64], basis1: &[f64], offset: &[f64]) -> Self {
-        let axis = get_axes(basis0, basis1);
-        let offvec = offset.to_owned();
-        let ext_prod = get_ext_products(&axis);
+        let basis = MatrixMN::from_rows(&[
+                RowDVector::from_row_slice(basis0),
+                RowDVector::from_row_slice(basis1),
+            ]);
+        let ext_prod = get_ext_products(&basis);
         State {
+            basis,
             dims,
-            basis: [DenseVector::from(basis0.to_owned()), DenseVector::from(basis1.to_owned())],
-            offset: DenseVector::from(offvec.clone()),
-            axis,
-            offvec,
+            offset: DVector::from_column_slice(offset),
             ext_prod,
         }
     }
 
     // Project a point in space onto the view plane.
-    fn project(&self, v: DenseVector<f64>) -> PPoint {
-        let v1 = v - &self.offset;
-        (v1.dot(&self.basis[0]), v1.dot(&self.basis[1]))
+    fn project(&self, v: DVector<f64>) -> Vector2<f64> {
+        &self.basis * (v - &self.offset)
     }
 
     // Take a point on the view plane to the corresponding point in space.
-    fn unproject(&self, (x,y): PPoint) -> DenseVector<f64> {
-        self.basis[0].clone().mul_add(x,
-            self.basis[1].clone().mul_add(y,
-                &self.offset))
+    fn unproject(&self, p: Vector2<f64>) -> DVector<f64> {
+        self.basis.tr_mul(&p) + &self.offset
     }
 
     // Find the range of grid lines for each axis.
     fn get_grid_ranges(&self, hbound: f64, vbound: f64) -> (Vec<i32>, Vec<i32>) {
         let corners = [
-            self.unproject((-hbound, -vbound)),
-            self.unproject((-hbound,  vbound)),
-            self.unproject(( hbound, -vbound)),
-            self.unproject(( hbound,  vbound)),
+            self.unproject(Vector2::new(-hbound, -vbound)),
+            self.unproject(Vector2::new(-hbound,  vbound)),
+            self.unproject(Vector2::new( hbound, -vbound)),
+            self.unproject(Vector2::new( hbound,  vbound)),
         ];
         let mut grid_min = vec![std::i32::MAX; self.dims];
         let mut grid_max = vec![std::i32::MIN; self.dims];
         corners.iter().for_each(|corner| {
-            corner.iter().for_each(|(i, x)| {
+            corner.iter().enumerate().for_each(|(i, x)| {
                 grid_min[i] = grid_min[i].min(x.floor() as i32);
                 grid_max[i] = grid_max[i].max(x.ceil() as i32);
             });
@@ -65,16 +56,16 @@ impl State {
         (grid_min, grid_max)
     }
 
-    fn get_face_vertex(&self, i: usize, j: usize, ki: f64, kj: f64) -> DenseVector<f64> {
+    fn get_face_vertex(&self, i: usize, j: usize, ki: f64, kj: f64) -> DVector<f64> {
         // Find the intersection (a,b) of the grid lines ki and kj.
-        let u = ki + 0.5 - self.offvec[i];
-        let v = kj + 0.5 - self.offvec[j];
-        let a = (u*self.axis[j].1 - v*self.axis[i].1) / self.ext_prod[i][j];
-        let b = (v*self.axis[i].0 - u*self.axis[j].0) / self.ext_prod[i][j];
+        let u = ki + 0.5 - self.offset[i];
+        let v = kj + 0.5 - self.offset[j];
+        let a = (u*self.basis[(1,j)] - v*self.basis[(1,i)]) / self.ext_prod[i][j];
+        let b = (v*self.basis[(0,i)] - u*self.basis[(0,j)]) / self.ext_prod[i][j];
 
         // Find the coordinates of the key vertex for the face
         // corresponding to this intersection.
-        self.unproject((a, b)).iter().map(|(ix, x)| {
+        self.unproject(Vector2::new(a, b)).map_with_location(|ix, _, x| {
             if ix == i {
                 return ki;
             } else if ix == j {
@@ -88,43 +79,40 @@ impl State {
                     // Axis i and ix are parallel. Shift the tile in the
                     // ix direction if they point the same direction
                     // AND this is the tile such that ix < i.
-                    if self.axis[ix].0*self.axis[i].0 + self.axis[ix].1*self.axis[i].1 > 0.0 && ix < i {
+                    if self.basis.column(ix).dot(&self.basis.column(i)) > 0.0 && ix < i {
+                        // eprintln!("singular case A {} {} {} {}", i, j, ki, kj);
                         return x.ceil();
                     }
                 } else if self.ext_prod[ix][j].abs() < EPSILON {
                     // Axis j and ix are parallel. Shift the tile in the
                     // ix direction if they point the same direction
                     // AND this is the tile such that ix < j.
-                    if self.axis[ix].0*self.axis[j].0 + self.axis[ix].1*self.axis[j].1 > 0.0 && ix < j {
+                    if self.basis.column(ix).dot(&self.basis.column(j)) > 0.0 && ix < j {
+                        // eprintln!("singular case B {} {} {} {}", i, j, ki, kj);
                         return x.ceil();
                     }
                 } else if self.ext_prod[i][j]*self.ext_prod[i][ix] > 0.0
                             && self.ext_prod[i][j]*self.ext_prod[ix][j] > 0.0 {
                     // Axis ix lies between axis i and axis j. Shift the tile
                     // in the ix direction by rounding up instead of down.
+                    // eprintln!("singular case C {} {} {} {}", i, j, ki, kj);
                     return x.ceil();
                 }
+                // eprintln!("singular case D {} {} {} {}", i, j, ki, kj);
                 return x.floor();
             }
             x.round()
         })
-        .collect()
     }
-}
-
-// It will be useful to have the projection of each axis on the view plane.
-// This is the same as the transpose of the basis.
-fn get_axes(basis0: &[f64], basis1: &[f64]) -> Vec<PPoint> {
-    basis0.iter().cloned().zip(basis1.iter().cloned()).collect()
 }
 
 // It will be useful to have the exterior products (aka perp dot product)
 // of each pair of axes.
-fn get_ext_products(axis: &[PPoint]) -> Vec<Vec<f64>> {
-    let mut prods = vec![vec![0.0; axis.len()]; axis.len()];
-    for i in 0..axis.len() {
+fn get_ext_products(basis: &MatrixMN<f64, U2, Dynamic>) -> Vec<Vec<f64>> {
+    let mut prods = vec![vec![0.0; basis.ncols()]; basis.ncols()];
+    for i in 1..basis.ncols() {
         for j in 0..i {
-            prods[i][j] = axis[i].0*axis[j].1 - axis[j].0*axis[i].1;
+            prods[i][j] = basis.column(i).perp(&basis.column(j));
             prods[j][i] = -prods[i][j];
         }
     }
@@ -162,15 +150,14 @@ pub fn generate(
                     let face_vert = state.get_face_vertex(i, j, f64::from(ki), f64::from(kj));
                     let f1 = state.project(face_vert);
 
-                    let mid_x = f1.0 + (state.axis[i].0 + state.axis[j].0)/2.0;
-                    let mid_y = f1.1 + (state.axis[i].1 + state.axis[j].1)/2.0;
-                    if mid_x.abs() > hbound || mid_y.abs() > vbound {
+                    let mid = f1 + (state.basis.column(i) + state.basis.column(j)) / 2.0;
+                    if mid[0].abs() > hbound || mid[1].abs() > vbound {
                         continue;
                     }
 
                     faces.push( Face {
-                        key_vert_x: f1.0,
-                        key_vert_y: f1.1,
+                        key_vert_x: f1[0],
+                        key_vert_y: f1[1],
                         axis1: i as u16,
                         axis2: j as u16,
                     });
@@ -179,4 +166,84 @@ pub fn generate(
         }
     }
     FaceList { faces }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn generate_penrose() {
+        let dims = 5;
+        let f = (2.0/dims as f64).sqrt();
+        let g = (dims % 2 + 1) as f64 * std::f64::consts::PI / dims as f64;
+        let basis0: Vec<_> = (0..dims).map(|x| f * (g * x as f64).cos()).collect();
+        let basis1: Vec<_> = (0..dims).map(|x| f * (g * x as f64).sin()).collect();
+        let offset: Vec<_> = (0..dims).map(|_| 0.3).collect();
+        let view_width = 10.0;
+        let view_height = 10.0;
+        let faces = generate(dims, &basis0, &basis1, &offset, view_width, view_height);
+        assert_eq!(406, faces.get_num_faces());
+    }
+
+    #[test]
+    fn generate_singular() {
+        // Test singular multigrid.
+        let dims = 5;
+        let f = (2.0/dims as f64).sqrt();
+        let g = (dims % 2 + 1) as f64 * std::f64::consts::PI / dims as f64;
+        let basis0: Vec<_> = (0..dims).map(|x| f * (g * x as f64).cos()).collect();
+        let basis1: Vec<_> = (0..dims).map(|x| f * (g * x as f64).sin()).collect();
+        let offset: Vec<_> = (0..dims).map(|_| 0.5).collect();
+        let view_width = 10.0;
+        let view_height = 10.0;
+        let faces = generate(dims, &basis0, &basis1, &offset, view_width, view_height);
+        assert_eq!(416, faces.get_num_faces());
+    }
+
+    #[test]
+    fn generate_singular_a() {
+        // Test singular case A -- parallel axes #1.
+        let basis0 = [0.0, 0.0, 1.0];
+        let basis1 = [FRAC_1_SQRT_2, FRAC_1_SQRT_2, 0.0];
+        let offset = [0.0; 3];
+        let state = State::new(3, &basis0, &basis1, &offset);
+        let face_vert = state.get_face_vertex(1, 2, 0.0, 0.0);
+        assert_eq!(face_vert, DVector::from_column_slice(&[1.0, 0.0, 0.0]));
+    }
+
+    #[test]
+    fn generate_singular_b() {
+        // Test singular case B -- parallel axes #2.
+        let basis0 = [1.0, 0.0, 0.0];
+        let basis1 = [0.0, FRAC_1_SQRT_2, FRAC_1_SQRT_2];
+        let offset = [0.0; 3];
+        let state = State::new(3, &basis0, &basis1, &offset);
+        let face_vert = state.get_face_vertex(0, 2, 0.0, 0.0);
+        assert_eq!(face_vert, DVector::from_column_slice(&[0.0, 1.0, 0.0]));
+    }
+
+    #[test]
+    fn generate_singular_c() {
+        // Test singular case C -- axis between non-parallel axes.
+        let f = (2.0f64/3.0).sqrt();
+        let basis0 = [f, f/2.0, f/2.0];
+        let basis1 = [0.0, FRAC_1_SQRT_2, -FRAC_1_SQRT_2];
+        let offset = [0.5; 3];
+        let state = State::new(3, &basis0, &basis1, &offset);
+        let face_vert = state.get_face_vertex(1, 2, 0.0, 0.0);
+        assert_eq!(face_vert, DVector::from_column_slice(&[1.0, 0.0, 0.0]));
+    }
+
+    #[test]
+    fn generate_singular_d() {
+        // Test singular case D -- axis not between non-parallel axes.
+        let f = (2.0f64/3.0).sqrt();
+        let basis0 = [f, f/2.0, f/2.0];
+        let basis1 = [0.0, FRAC_1_SQRT_2, -FRAC_1_SQRT_2];
+        let offset = [0.5; 3];
+        let state = State::new(3, &basis0, &basis1, &offset);
+        let face_vert = state.get_face_vertex(0, 1, 0.0, 0.0);
+        assert_eq!(face_vert, DVector::from_column_slice(&[0.0, 0.0, 0.0]));
+    }
 }
