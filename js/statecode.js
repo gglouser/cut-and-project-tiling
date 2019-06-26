@@ -8,11 +8,11 @@ export function base64ToBlob(base64str) {
 }
 
 function colorhex(n) {
-    return Math.max(0, Math.min(255, Math.floor(n)))
+    return Math.max(0, Math.min(255, Math.round(n)))
         .toString(16).padStart(2, '0');
 }
 
-function makeColor(r,g,b) {
+export function makeColor(r,g,b) {
     return `#${colorhex(r)}${colorhex(g)}${colorhex(b)}`;
 }
 
@@ -23,12 +23,15 @@ function readColor(view, ptr) {
     return makeColor(r,g,b);
 }
 
-function splitColor(c) {
-    // TODO Obviously won't work in case of color names or other format. Use regex.
-    const r = Number.parseInt(c.slice(1,3), 16);
-    const g = Number.parseInt(c.slice(3,5), 16);
-    const b = Number.parseInt(c.slice(5,7), 16);
-    return [r,g,b];
+export function splitColor(c) {
+    const m = c.match(/#([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})/i);
+    if (m !== null) {
+        const r = Number.parseInt(m[1], 16)/255;
+        const g = Number.parseInt(m[2], 16)/255;
+        const b = Number.parseInt(m[3], 16)/255;
+        return [r,g,b];
+    }
+    return [0,0,0];
 }
 
 export function encodeState(state) {

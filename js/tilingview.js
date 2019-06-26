@@ -1,5 +1,5 @@
 import { TilingState, getFaceTypes } from './tiling.js';
-import { encodeState, decodeState, base64ToBlob } from './statecode.js';
+import { encodeState, decodeState, base64ToBlob, makeColor, splitColor } from './statecode.js';
 
 const GRID_SCALE = 60;
 const GRID_SCALE_MIN = 30;
@@ -20,16 +20,22 @@ export class TilingViewState extends TilingState {
             return;
         }
 
-        const simpleColors = {
-            4: ['#e8e8ff', '#808080', '#e8e8ff'],
-            5: ['#e8e8ff', '#808080', '#808080', '#e8e8ff'],
-            6: ['#808080', '#c0c0c0', '#e8e8ff', '#c0c0c0', '#808080'],
-            7: ['#c0c0c0', '#e8e8ff', '#808080', '#808080', '#e8e8ff', '#c0c0c0'],
-        }[dims];
+        let max = 0.0;
+        let min = 1.0;
+        for (let i = 1; i < dims; i++) {
+            const x = Math.abs(this.basis[0][0]*this.basis[0][i] + this.basis[1][0]*this.basis[1][i]);
+            max = Math.max(max, x);
+            min = Math.min(min, x);
+        }
         this.colors = [];
         for (let i = 0; i < dims-1; i++) {
-            for (let j = 0; j < dims-i-1; j++) {
-                this.colors.push(simpleColors ? simpleColors[j] : '#ffffff');
+            for (let j = i+1; j < dims; j++) {
+                const dot_ij = this.basis[0][i]*this.basis[0][j] + this.basis[1][i]*this.basis[1][j];
+                const x = (Math.abs(dot_ij) - min) / (max - min);
+                const r = 0xe8 - 0x68*x;
+                const g = 0xe8 - 0x68*x;
+                const b = 0xff - 0x7f*x;
+                this.colors.push(makeColor(r,g,b));
             }
         }
     }
@@ -75,7 +81,6 @@ export class TilingView {
 
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
-        this.calcViewSize();
 
         canvas.addEventListener('mousedown', this, false);
         canvas.addEventListener('mousemove', this, false);
@@ -104,8 +109,10 @@ export class TilingView {
     }
 
     draw(state, tilingGen) {
-        const faces = tilingGen(state, this.viewWidth, this.viewHeight);
-        this.renderer.render(state, faces, this.scale, this.viewWidth, this.viewHeight);
+        const viewWidth = this.canvas.width / this.scale;
+        const viewHeight = this.canvas.height / this.scale;
+        const faces = tilingGen(state, viewWidth, viewHeight);
+        this.renderer.render(state, faces, this.scale);
     }
 
     handleEvent(event) {
@@ -219,11 +226,6 @@ export class TilingView {
         this.app.translateOffset(dx/this.scale, dy/this.scale);
     }
 
-    calcViewSize() {
-        this.viewWidth = this.canvas.width / this.scale;
-        this.viewHeight = this.canvas.height / this.scale;
-    }
-
     viewZoom(dzoom) {
         const oldScale = this.scale;
         if (dzoom > 1) {
@@ -232,7 +234,6 @@ export class TilingView {
             this.scale = Math.max(GRID_SCALE_MIN, Math.floor(this.scale * dzoom));
         }
         if (this.scale !== oldScale) {
-            this.calcViewSize();
             this.app.redraw();
         }
     }
@@ -240,7 +241,6 @@ export class TilingView {
     resize() {
         this.canvas.width = this.canvas.clientWidth;
         this.canvas.height = this.canvas.clientHeight;
-        this.calcViewSize();
         this.app.redraw();
     }
 }
@@ -282,10 +282,14 @@ class Renderer2D {
 class RendererGL {
     constructor(gl) {
         this.gl = gl;
-        this.programInfo = this.initShaders();
+        this.programInfo = this.initShaders(5);
     }
 
-    render(state, faces, scale, vw, vh) {
+    render(state, faces, scale) {
+        if (this.programInfo.shaderDims !== state.dims) {
+            // console.debug("recompiling shaders for", state.dims, "dims");
+            this.programInfo = this.initShaders(state.dims);
+        }
         const buffers = initBuffers(this.gl, state, faces);
         const uColors = state.colors.flatMap(splitColor);
 
@@ -295,14 +299,14 @@ class RendererGL {
             uAxis.push(state.basis[1][i]);
         }
 
-        drawScene(this.gl, this.programInfo, buffers, vw, vh, uColors, uAxis);
+        drawScene(this.gl, this.programInfo, buffers, scale, uColors, uAxis);
     }
 
-    initShaders() {
+    initShaders(dims) {
         // Vertex shader program
         const vsSource = `
-            const int MAX_DIMS = 7;
-            const int NUM_COLORS = 21;
+            const int MAX_DIMS = ${dims};
+            const int NUM_COLORS = MAX_DIMS*(MAX_DIMS-1)/2;
 
             attribute vec2 aVertexPosition;
             attribute float aVertexColor;
@@ -325,12 +329,6 @@ class RendererGL {
                         color_id = 0;
                 }
                 vColor = uColors[color_id];
-
-                // vec2 midp = aFacePosition + face_basis * vec2(0.5, 0.5);
-                // vColor = vec3(0.5 + cos(midp.x)/2.0, 0.0, 0.5 + cos(midp.y)/2.0);
- 
-                // vec2 inv = aFacePosition + face_basis * (vec2(1.0, 1.0) - aVertexPosition);
-                // vColor = vec3(0.5 + cos(inv.x)/4.0, 0.0, 0.75 + cos(inv.y)/4.0);
             }
         `;
 
@@ -352,6 +350,7 @@ class RendererGL {
         // for aVertexPosition and look up uniform locations.
         return {
             program: shaderProgram,
+            shaderDims: dims,
             attribLocations: {
                 vertexPosition: this.gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
                 vertexColor: this.gl.getAttribLocation(shaderProgram, 'aVertexColor'),
@@ -541,19 +540,8 @@ function initBuffers(gl, state, faces) {
     };
 }
 
-function splitColor(c) {
-    const m = c.match(/#([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})/i);
-    if (m !== null) {
-        const r = Number.parseInt(m[1], 16)/255;
-        const g = Number.parseInt(m[2], 16)/255;
-        const b = Number.parseInt(m[3], 16)/255;
-        return [r,g,b];
-    }
-    return [0,0,0];
-}
-
 // See: MDN WebGL tutorial, "Adding 2D content to a WebGL context"
-function drawScene(gl, programInfo, buffers, viewWidth, viewHeight, colors, axis) {
+function drawScene(gl, programInfo, buffers, scale, colors, axis) {
     // Set GL viewport. Do this every time because canvas can be resized.
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
@@ -573,7 +561,7 @@ function drawScene(gl, programInfo, buffers, viewWidth, viewHeight, colors, axis
     gl.useProgram(programInfo.program);
 
     // Set the shader uniforms
-    const scalingFactor = [2/viewWidth, -2/viewHeight];
+    const scalingFactor = [2*scale/gl.canvas.width, -2*scale/gl.canvas.height];
     gl.uniform2fv(programInfo.uniformLocations.scalingFactor, scalingFactor);
     gl.uniform3fv(programInfo.uniformLocations.colors, colors);
     gl.uniform2fv(programInfo.uniformLocations.axis, axis);
