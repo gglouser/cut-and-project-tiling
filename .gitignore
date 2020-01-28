@@ -8,3 +8,4 @@ crate/bin
 crate/pkg
 crate/target
 crate/Cargo.lock
+pkg/

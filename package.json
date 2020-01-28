@@ -11,11 +11,11 @@
     "build": "webpack"
   },
   "devDependencies": {
-    "@wasm-tool/wasm-pack-plugin": "0.2.3",
-    "webpack": "^4.29.3",
-    "webpack-cli": "^3.2.3",
-    "webpack-dev-server": "^3.1.14",
-    "copy-webpack-plugin": "^4.6.0",
+    "@wasm-tool/wasm-pack-plugin": "1.1.0",
+    "webpack": "^4.41.5",
+    "webpack-cli": "^3.3.10",
+    "webpack-dev-server": "^3.10.1",
+    "copy-webpack-plugin": "^5.1.1",
     "text-encoding-utf-8": "^1.0.2"
   }
 }
