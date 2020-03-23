@@ -56,53 +56,67 @@ impl State {
         (grid_min, grid_max)
     }
 
-    fn get_face_vertex(&self, i: usize, j: usize, ki: f64, kj: f64) -> DVector<f64> {
-        // Find the intersection (a,b) of the grid lines ki and kj.
-        let u = ki + 0.5 - self.offset[i];
-        let v = kj + 0.5 - self.offset[j];
-        let a = (u*self.basis[(1,j)] - v*self.basis[(1,i)]) / self.ext_prod[i][j];
-        let b = (v*self.basis[(0,i)] - u*self.basis[(0,j)]) / self.ext_prod[i][j];
+    fn get_face_vertex(&self, a1: usize, a2: usize, k1: f64, k2: f64) -> DVector<f64> {
+        // Find the intersection (a,b) of the grid lines k1 and k2.
+        let u = k1 + 0.5 - self.offset[a1];
+        let v = k2 + 0.5 - self.offset[a2];
+        let a = (u*self.basis[(1,a2)] - v*self.basis[(1,a1)]) / self.ext_prod[a1][a2];
+        let b = (v*self.basis[(0,a1)] - u*self.basis[(0,a2)]) / self.ext_prod[a1][a2];
 
         // Find the coordinates of the key vertex for the face
         // corresponding to this intersection.
-        self.unproject(Vector2::new(a, b)).map_with_location(|ix, _, x| {
-            if ix == i {
-                return ki;
-            } else if ix == j {
-                return kj;
-            }
+        self.unproject(Vector2::new(a, b)).map_with_location(|ax, _, x| {
+            // Round each component of the unprojected vector to an integer.
+            // Here we round the value x corresponding with axis ax.
 
-            // Check for multiple intersections. If the fractional part of this coord
-            // is 0.5, then it is on one of the grid lines for ix.
-            if (x - x.floor() - 0.5).abs() < 1e-10 {
-                if self.ext_prod[i][ix].abs() < EPSILON {
-                    // Axis i and ix are parallel. Shift the tile in the
-                    // ix direction if they point the same direction
-                    // AND this is the tile such that ix < i.
-                    if self.basis.column(ix).dot(&self.basis.column(i)) > 0.0 && ix < i {
-                        // eprintln!("singular case A {} {} {} {}", i, j, ki, kj);
-                        return x.ceil();
-                    }
-                } else if self.ext_prod[ix][j].abs() < EPSILON {
-                    // Axis j and ix are parallel. Shift the tile in the
-                    // ix direction if they point the same direction
-                    // AND this is the tile such that ix < j.
-                    if self.basis.column(ix).dot(&self.basis.column(j)) > 0.0 && ix < j {
-                        // eprintln!("singular case B {} {} {} {}", i, j, ki, kj);
-                        return x.ceil();
-                    }
-                } else if self.ext_prod[i][j]*self.ext_prod[i][ix] > 0.0
-                            && self.ext_prod[i][j]*self.ext_prod[ix][j] > 0.0 {
-                    // Axis ix lies between axis i and axis j. Shift the tile
-                    // in the ix direction by rounding up instead of down.
-                    // eprintln!("singular case C {} {} {} {}", i, j, ki, kj);
-                    return x.ceil();
-                }
-                // eprintln!("singular case D {} {} {} {}", i, j, ki, kj);
-                return x.floor();
+            // If ax is a1 or a2, then we can just use the known grid line that
+            // was given as a function parameter.
+            if ax == a1 {
+                k1
+            } else if ax == a2 {
+                k2
+
+            // Next, check for singular multigrid.
+            //
+            // The unprojected point is the intersection of a grid line from axis a1
+            // and a grid line from axis a2. We need to check whether the nearest
+            // grid line from axis ax also passes through this intersection. If it does,
+            // the multigrid is called "singular" and the tiling is ambiguous.
+            //
+            // The intersection is on a grid line of axis ax if x has a fractional
+            // part of 0.5. The ambiguity of the tiling corresponds to the ambiguity
+            // of rounding up or down for a number with fractional part 0.5.
+            // We resolve the ambiguity in the following way: if axis ax lies between
+            // axis a1 and axis a2 on the cutting plane, then round up.
+            // Otherwise, round down.
+            } else if (x - x.floor() - 0.5).abs() > 1e-10 {
+                // Normal (non-singular) case.
+                x.round()
+            } else if self.axis_between(a1, a2, ax) {
+                x.ceil()
+            } else {
+                x.floor()
             }
-            x.round()
         })
+    }
+
+    // Test whether axis ax is between axes a1 and a2.
+    // We can assume that a1 != ax != a2 and that axes a1 and a2 are not parallel.
+    fn axis_between(&self, a1: usize, a2: usize, ax: usize) -> bool {
+        if self.ext_prod[a1][ax].abs() < EPSILON {
+            // Axes a1 and ax are parallel. Consider ax to lie between
+            // if a1 and ax point the same direction AND ax < a1.
+            self.basis.column(a1).dot(&self.basis.column(ax)) > 0.0 && ax < a1
+        } else if self.ext_prod[ax][a2].abs() < EPSILON {
+            // Axis ax and a2 are parallel. Consider ax to lie between
+            // if ax and a2 point the same direction AND ax < a2.
+            self.basis.column(ax).dot(&self.basis.column(a2)) > 0.0 && ax < a2
+        } else {
+            // Axis ax lies between axis a1 and axis a2 if the rotation from
+            // a1 to a2 is the same as a1 to ax and ax to a2.
+            self.ext_prod[a1][a2]*self.ext_prod[a1][ax] > 0.0
+                && self.ext_prod[a1][a2]*self.ext_prod[ax][a2] > 0.0
+        }
     }
 }
 
