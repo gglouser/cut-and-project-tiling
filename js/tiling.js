@@ -393,33 +393,35 @@ function getFaceVertex(i, j, ki, kj, state, axis, extProd) {
 
         // Check for multiple intersections. If the fractional part of this coord
         // is 0.5, then it is on one of the grid lines for ix.
-        if (Math.abs(x - Math.floor(x) - 0.5) < 1e-10) {
-            if (Math.abs(extProd[i][ix]) < Number.EPSILON) {
-                // Axis i and ix are parallel. Shift the tile in the
-                // ix direction if they point the same direction
-                // AND this is the tile such that ix < i.
-                if (Vec.dot(axis[ix], axis[i]) > 0 && ix < i) {
-                    return Math.ceil(x);
-                }
-            } else if (Math.abs(extProd[ix][j]) < Number.EPSILON) {
-                // Axis j and ix are parallel. Shift the tile in the
-                // ix direction if they point the same direction
-                // AND this is the tile such that ix < j.
-                if (Vec.dot(axis[ix], axis[j]) > 0 && ix < j) {
-                    return Math.ceil(x);
-                }
-            } else if (extProd[i][j]*extProd[i][ix] > 0
-                        && extProd[i][j]*extProd[ix][j] > 0) {
-                // Axis ix lies between axis i and axis j. Shift the tile
-                // in the ix direction by rounding up instead of down.
-                return Math.ceil(x);
-            }
+        if (Math.abs(x - Math.floor(x) - 0.5) > 1e-10) {
+            return Math.round(x);
+        } else if (axis_between(i, j, ix, axis, extProd)) {
+            return Math.ceil(x);
+        } else {
             return Math.floor(x);
         }
-
-        return Math.round(x);
     });
+}
 
+function axis_between(a1, a2, ax, axis, extProd) {
+    if (Math.abs(extProd[a1][ax]) < Number.EPSILON) {
+        // Axis a1 and ax are parallel. Shift the tile in the
+        // ax direction if they point the same direction
+        // AND this is the tile such that ax < a1.
+        return Vec.dot(axis[ax], axis[a1]) > 0 && ax < a1;
+
+    } else if (Math.abs(extProd[ax][a2]) < Number.EPSILON) {
+        // Axis a2 and ax are parallel. Shift the tile in the
+        // ax direction if they point the same direction
+        // AND this is the tile such that ax < a2.
+        return Vec.dot(axis[ax], axis[a2]) > 0 && ax < a2;
+
+    } else {
+        // Axis ax lies between axis a1 and axis a2. Shift the tile
+        // in the ax direction by rounding up instead of down.
+        return extProd[a1][a2]*extProd[a1][ax] > 0
+                && extProd[a1][a2]*extProd[ax][a2] > 0;
+    }
 }
 
 // It will also be useful to have the exterior products (aka perp dot products)
