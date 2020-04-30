@@ -1,5 +1,6 @@
 import { getFaceTypes } from './tiling.js';
-import { splitColor } from './statecode.js';
+
+const VERTEX_PER_FACE = 6;
 
 export class RendererGL {
     constructor(gl) {
@@ -12,32 +13,28 @@ export class RendererGL {
             // console.debug("recompiling shaders for", state.dims, "dims");
             this.programInfo = this.initShaders(state.dims);
         }
-        const buffers = initBuffers(this.gl, state, faces);
-        const uColors = state.colors.flatMap(splitColor);
 
-        const uAxis = [];
-        for (let i = 0; i < state.dims; i++) {
-            uAxis.push(state.basis[0][i]);
-            uAxis.push(state.basis[1][i]);
-        }
+        const buffers = this.initBuffers(VERTEX_PER_FACE * faces.length);
+        this.drawFaces(buffers, faces, state);
+        this.bufferData(buffers);
 
-        this.drawScene(buffers, scale, uColors, uAxis, splitColor(state.lineColor));
+        const uniforms = this.initUniforms(state, scale);
+
+        this.drawScene(buffers, uniforms, state.lineColor);
     }
 
     initShaders(dims) {
         // Vertex shader program
         const vsSource = `
             const int MAX_DIMS = ${dims};
-            const int NUM_COLORS = MAX_DIMS*(MAX_DIMS-1)/2;
 
             attribute vec2 aVertexPosition;
-            attribute float aVertexColor;
+            attribute vec3 aVertexColor;
             attribute vec2 aFaceAxis;
             attribute vec2 aFacePosition;
 
             uniform vec2 uScalingFactor;
             uniform vec2 uAxis[MAX_DIMS];
-            uniform vec3 uColors[NUM_COLORS];
 
             varying lowp vec3 vColor;
 
@@ -45,12 +42,7 @@ export class RendererGL {
                 mat2 face_basis = mat2(uAxis[int(aFaceAxis[0])], uAxis[int(aFaceAxis[1])]);
                 vec2 v = aFacePosition + face_basis * aVertexPosition;
                 gl_Position = vec4(v * uScalingFactor, 0.0, 1.0);
-
-                int color_id = int(aVertexColor);
-                if (color_id >= NUM_COLORS) {
-                        color_id = 0;
-                }
-                vColor = uColors[color_id];
+                vColor = aVertexColor / 255.0;
             }
         `;
 
@@ -76,20 +68,91 @@ export class RendererGL {
             },
             uniformLocations: {
                 scalingFactor: this.gl.getUniformLocation(shaderProgram, 'uScalingFactor'),
-                colors: this.gl.getUniformLocation(shaderProgram, 'uColors'),
                 axis: this.gl.getUniformLocation(shaderProgram, 'uAxis'),
             },
         };
     }
 
-    drawScene(buffers, scale, colors, axis, lineColor) {
+    initBuffers(vertexCount) {
+        return {
+            vertexCount,
+            vertexPosition: new GLAttributeBuffer(this.gl, vertexCount, 2),
+            color: new GLAttributeBuffer(this.gl, vertexCount, 3),
+            axis: new GLAttributeBuffer(this.gl, vertexCount, 2),
+            facePos: new GLAttributeBuffer(this.gl, vertexCount, 2),
+        };
+    }
+
+    bufferData(buffers) {
+        buffers.vertexPosition.bufferData();
+        buffers.color.bufferData();
+        buffers.axis.bufferData();
+        buffers.facePos.bufferData();
+    }
+
+    initUniforms(state, scale) {
+        const axis = [];
+        for (let i = 0; i < state.dims; i++) {
+            axis.push(state.basis[0][i]);
+            axis.push(state.basis[1][i]);
+        }
+
+        return {
+            axis,
+            scalingFactor: [2*scale/this.gl.canvas.width, -2*scale/this.gl.canvas.height],
+        };
+    }
+
+    drawFaces(buffers, faces, state) {
+        const insets = getInsets(state);
+        const faceTypes = getFaceTypes(state.dims);
+        faces.forEach((face) => {
+            const color = state.colors[faceTypes[face.axis1][face.axis2]];
+            this.drawFace(buffers, face, insets, color);
+        });
+    }
+
+    drawFace(buffers, face, insets, color) {
+        // Helper function to add one vertex to the buffers.
+        const pushVertex = (pos) => {
+            buffers.vertexPosition.push(pos[0]);
+            buffers.vertexPosition.push(pos[1]);
+            buffers.color.push(color[0]);
+            buffers.color.push(color[1]);
+            buffers.color.push(color[2]);
+            buffers.axis.push(face.axis1);
+            buffers.axis.push(face.axis2);
+            buffers.facePos.push(face.keyVert[0]);
+            buffers.facePos.push(face.keyVert[1]);
+        }
+
+        // Inset vertex positions for this face.
+        const inset1 = insets[face.axis1][face.axis2];
+        const inset2 = insets[face.axis2][face.axis1];
+        const vertPos = [
+            [0 + inset1, 0 + inset2],
+            [1 - inset1, 0 + inset2],
+            [1 - inset1, 1 - inset2],
+            [0 + inset1, 1 - inset2],
+        ];
+
+        pushVertex(vertPos[0]);
+        pushVertex(vertPos[1]);
+        pushVertex(vertPos[2]);
+
+        pushVertex(vertPos[0]);
+        pushVertex(vertPos[2]);
+        pushVertex(vertPos[3]);
+    }
+
+    drawScene(buffers, uniforms, bgColor) {
         const gl = this.gl;
 
         // Set GL viewport. Do this every time because canvas can be resized.
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
         // Clear the canvas before we start drawing on it.
-        gl.clearColor(lineColor[0], lineColor[1], lineColor[2], 1.0);
+        gl.clearColor(bgColor[0], bgColor[1], bgColor[2], 1.0);
         gl.clearDepth(1.0);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -103,17 +166,16 @@ export class RendererGL {
         gl.useProgram(this.programInfo.program);
 
         // Set the shader uniforms
-        const scalingFactor = [2*scale/gl.canvas.width, -2*scale/gl.canvas.height];
-        gl.uniform2fv(this.programInfo.uniformLocations.scalingFactor, scalingFactor);
-        gl.uniform3fv(this.programInfo.uniformLocations.colors, colors);
-        gl.uniform2fv(this.programInfo.uniformLocations.axis, axis);
+        gl.uniform2fv(this.programInfo.uniformLocations.scalingFactor, uniforms.scalingFactor);
+        gl.uniform2fv(this.programInfo.uniformLocations.axis, uniforms.axis);
 
         const offset = 0;
         gl.drawArrays(gl.TRIANGLES, offset, buffers.vertexCount);
     }
 }
 
-function getInsets(state, lineWidth) {
+function getInsets(state) {
+    const lineWidth = state.lineWidth / 2;
     const insets = [];
     for (let i = 0; i < state.dims; i++) {
         insets.push([]);
@@ -134,71 +196,6 @@ function getInsets(state, lineWidth) {
         }
     }
     return insets;
-}
-
-function initBuffers(gl, state, faces) {
-    const vertexPerFace = 6;
-    const vertexCount = vertexPerFace * faces.length;
-
-    const insets = getInsets(state, state.lineWidth/2);
-
-    // Create array of vertex positions relative to the face position.
-    const vertexPosition = new GLAttributeBuffer(gl, vertexCount, 2);
-    faces.forEach((f) => {
-        const lw1 = insets[f.axis1][f.axis2];
-        const lw2 = insets[f.axis2][f.axis1];
-        vertexPosition.push(0 + lw1);
-        vertexPosition.push(0 + lw2);
-        vertexPosition.push(1 - lw1);
-        vertexPosition.push(0 + lw2);
-        vertexPosition.push(1 - lw1);
-        vertexPosition.push(1 - lw2);
-        vertexPosition.push(0 + lw1);
-        vertexPosition.push(0 + lw2);
-        vertexPosition.push(1 - lw1);
-        vertexPosition.push(1 - lw2);
-        vertexPosition.push(0 + lw1);
-        vertexPosition.push(1 - lw2);
-    });
-    vertexPosition.bufferData();
-
-    // Create an array for the face colors.
-    const faceTypes = getFaceTypes(state.dims);
-    const color = new GLAttributeBuffer(gl, vertexCount, 1);
-    faces.forEach((f) => {
-        for (let j = 0; j < vertexPerFace; j++) {
-            color.push(faceTypes[f.axis1][f.axis2]);
-        }
-    });
-    color.bufferData();
-
-    // Create an array for face axis indices.
-    const axis = new GLAttributeBuffer(gl, vertexCount, 2);
-    faces.forEach((f) => {
-        for (let j = 0; j < vertexPerFace; j++) {
-            axis.push(f.axis1);
-            axis.push(f.axis2);
-        }
-    });
-    axis.bufferData();
-
-    // Create an array for face positions (key vertex).
-    const facePos = new GLAttributeBuffer(gl, vertexCount, 2);
-    faces.forEach((f) => {
-        for (let j = 0; j < vertexPerFace; j++) {
-            facePos.push(f.keyVert[0]);
-            facePos.push(f.keyVert[1]);
-        }
-    });
-    facePos.bufferData();
-
-    return {
-        vertexCount,
-        vertexPosition,
-        color,
-        axis,
-        facePos,
-    };
 }
 
 //

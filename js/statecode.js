@@ -20,15 +20,15 @@ function readColor(view, ptr) {
     const r = view.getUint8(ptr);
     const g = view.getUint8(ptr+1);
     const b = view.getUint8(ptr+2);
-    return makeColor(r,g,b);
+    return [r,g,b];
 }
 
 export function splitColor(c) {
     const m = c.match(/#([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})/i);
     if (m !== null) {
-        const r = Number.parseInt(m[1], 16)/255;
-        const g = Number.parseInt(m[2], 16)/255;
-        const b = Number.parseInt(m[3], 16)/255;
+        const r = Number.parseInt(m[1], 16);
+        const g = Number.parseInt(m[2], 16);
+        const b = Number.parseInt(m[3], 16);
         return [r,g,b];
     }
     return [0,0,0];
@@ -60,12 +60,12 @@ export function encodeState(state) {
     });
 
     // Write line color.
-    splitColor(state.lineColor).forEach((v,i) => view.setUint8(ptr + i, v));
+    state.lineColor.forEach((v,i) => view.setUint8(ptr + i, v));
     ptr += 3;
 
     // Write face colors.
     colors.forEach((c) => {
-        splitColor(c).forEach((v, i) => view.setUint8(ptr + i, v));
+        c.forEach((v, i) => view.setUint8(ptr + i, v));
         ptr += 3;
     });
 

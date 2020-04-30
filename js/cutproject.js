@@ -3,6 +3,7 @@ import { AxisControls, OffsetControls } from './controls.js';
 import { generateCutProj, generateMultigrid } from './tiling.js';
 import { generateWasm } from './tiling_wasm.js';
 import { rotate } from './vector.js';
+import { makeColor, splitColor } from './statecode.js';
 
 class TilingApp {
     constructor() {
@@ -131,10 +132,10 @@ class TilingApp {
                 const colorIxHere = colorIx++;
                 const ctl = document.createElement('input');
                 ctl.type = 'color';
-                ctl.value = this.state.colors[colorIxHere];
+                ctl.value = makeColor(...this.state.colors[colorIxHere]);
                 ctl.style.width = widthStyle;
                 ctl.addEventListener('input', () => {
-                    this.state.colors[colorIxHere] = ctl.value;
+                    this.state.colors[colorIxHere] = splitColor(ctl.value);
                     this.redraw();
                 });
                 rowDiv.prepend(ctl);

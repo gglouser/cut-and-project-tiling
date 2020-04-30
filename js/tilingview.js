@@ -1,12 +1,12 @@
 import { TilingState, getFaceTypes } from './tiling.js';
-import { encodeState, decodeState, base64ToBlob, makeColor } from './statecode.js';
+import { encodeState, decodeState, base64ToBlob } from './statecode.js';
 import { RendererGL } from './rendergl.js';
 
 const GRID_SCALE_INIT = 60;
 const GRID_SCALE_MIN = 30;
 const GRID_SCALE_MAX = 290;
 const LINE_WIDTH_INIT = 2/GRID_SCALE_INIT;
-const LINE_COLOR_INIT = '#000000';
+const LINE_COLOR_INIT = [0,0,0];
 
 export class TilingViewState extends TilingState {
     constructor(dims) {
@@ -18,7 +18,7 @@ export class TilingViewState extends TilingState {
 
     initColors(dims) {
         if (dims === 3) {
-            this.colors = ['#808080', '#e8e8ff', '#c0c0c0'];
+            this.colors = [[128,128,128], [232,232,255], [180,180,192]];
             return;
         }
 
@@ -37,7 +37,7 @@ export class TilingViewState extends TilingState {
                 const r = 0xe8 - 0x68*x;
                 const g = 0xe8 - 0x68*x;
                 const b = 0xff - 0x7f*x;
-                this.colors.push(makeColor(r,g,b));
+                this.colors.push([r,g,b]);
             }
         }
     }
