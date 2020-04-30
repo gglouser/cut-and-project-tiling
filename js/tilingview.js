@@ -1,4 +1,4 @@
-import { TilingState, getFaceTypes } from './tiling.js';
+import { TilingState } from './tiling.js';
 import { encodeState, decodeState, base64ToBlob } from './statecode.js';
 import { RendererGL } from './rendergl.js';
 
@@ -12,6 +12,7 @@ export class TilingViewState extends TilingState {
     constructor(dims) {
         super(dims);
         this.initColors(dims);
+        this.faceTypes = getFaceTypes(dims);
         this.lineColor = LINE_COLOR_INIT;
         this.lineWidth = LINE_WIDTH_INIT;
     }
@@ -40,6 +41,34 @@ export class TilingViewState extends TilingState {
                 this.colors.push([r,g,b]);
             }
         }
+    }
+
+    getColor(axis1, axis2) {
+        return this.colors[this.faceTypes[axis1][axis2]];
+    }
+
+    getInsets() {
+        const lineWidth = this.lineWidth / 2;
+        const insets = [];
+        for (let i = 0; i < this.dims; i++) {
+            insets.push([]);
+        }
+
+        for (let i = 0; i < this.dims; i++) {
+            const s0 = this.basis[0][i];
+            const s1 = this.basis[1][i];
+            for (let j = 0; j < this.dims; j++) {
+                if (i === j) {
+                    insets[i][j] = 0;
+                } else {
+                    const t0 = this.basis[0][j];
+                    const t1 = this.basis[1][j];
+                    insets[i][j] = lineWidth * Math.hypot(t0, t1) / Math.abs(s0*t1 - s1*t0);
+                    insets[i][j] = Math.min(insets[i][j], 0.5);
+                }
+            }
+        }
+        return insets;
     }
 
     genStateCode(contF) {
@@ -72,6 +101,23 @@ export function loadStateCode(stateCode, contF) {
         }
     }, false);
     reader.readAsArrayBuffer(blob);
+}
+
+function getFaceTypes(dims) {
+    const faceType = [];
+    for (let i = 0; i < dims; i++) {
+        faceType.push([]);
+    }
+
+    let typeIx = 0;
+    for (let i = 0; i < dims-1; i++) {
+        for (let j = i+1; j < dims; j++) {
+            faceType[i][j] = typeIx;
+            faceType[j][i] = typeIx;
+            typeIx += 1;
+        }
+    }
+    return faceType;
 }
 
 export class TilingView {
@@ -254,7 +300,6 @@ class Renderer2D {
 
     render(state, faces, scale) {
         const ctx = this.ctx;
-        const faceTypes = getFaceTypes(state.dims);
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         ctx.save();
@@ -265,7 +310,7 @@ class Renderer2D {
         ctx.lineJoin = 'bevel';
         ctx.strokeStyle = state.lineColor;
         faces.forEach((f) => {
-            ctx.fillStyle = state.colors[faceTypes[f.axis1][f.axis2]];
+            ctx.fillStyle = state.getColor(f.axis1, f.axis2);
             ctx.beginPath();
             ctx.moveTo(f.keyVert[0], f.keyVert[1]);
             ctx.lineTo(f.keyVert[0] + state.basis[0][f.axis1], f.keyVert[1] + state.basis[1][f.axis1]);

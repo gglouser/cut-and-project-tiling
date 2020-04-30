@@ -1,5 +1,3 @@
-import { getFaceTypes } from './tiling.js';
-
 const VERTEX_PER_FACE = 6;
 
 export class RendererGL {
@@ -90,6 +88,13 @@ export class RendererGL {
         buffers.facePos.bufferData();
     }
 
+    enableBuffers(buffers) {
+        buffers.vertexPosition.enable(this.programInfo.attribLocations.vertexPosition);
+        buffers.color.enable(this.programInfo.attribLocations.vertexColor);
+        buffers.axis.enable(this.programInfo.attribLocations.faceAxis);
+        buffers.facePos.enable(this.programInfo.attribLocations.facePosition);
+    }
+
     initUniforms(state, scale) {
         const axis = [];
         for (let i = 0; i < state.dims; i++) {
@@ -103,16 +108,21 @@ export class RendererGL {
         };
     }
 
+    setUniforms(uniforms) {
+        this.gl.uniform2fv(this.programInfo.uniformLocations.scalingFactor, uniforms.scalingFactor);
+        this.gl.uniform2fv(this.programInfo.uniformLocations.axis, uniforms.axis);
+    }
+
     drawFaces(buffers, faces, state) {
-        const insets = getInsets(state);
-        const faceTypes = getFaceTypes(state.dims);
+        const insets = state.getInsets();
         faces.forEach((face) => {
-            const color = state.colors[faceTypes[face.axis1][face.axis2]];
-            this.drawFace(buffers, face, insets, color);
+            this.drawFace(buffers, face, state, insets);
         });
     }
 
-    drawFace(buffers, face, insets, color) {
+    drawFace(buffers, face, state, insets) {
+        const color = state.getColor(face.axis1, face.axis2);
+
         // Helper function to add one vertex to the buffers.
         const pushVertex = (pos) => {
             buffers.vertexPosition.push(pos[0]);
@@ -124,7 +134,7 @@ export class RendererGL {
             buffers.axis.push(face.axis2);
             buffers.facePos.push(face.keyVert[0]);
             buffers.facePos.push(face.keyVert[1]);
-        }
+        };
 
         // Inset vertex positions for this face.
         const inset1 = insets[face.axis1][face.axis2];
@@ -157,45 +167,17 @@ export class RendererGL {
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
         // Tell WebGL how to pull out the attributes from the attribute buffers.
-        buffers.vertexPosition.enable(this.programInfo.attribLocations.vertexPosition);
-        buffers.color.enable(this.programInfo.attribLocations.vertexColor);
-        buffers.axis.enable(this.programInfo.attribLocations.faceAxis);
-        buffers.facePos.enable(this.programInfo.attribLocations.facePosition);
+        this.enableBuffers(buffers);
 
         // Tell WebGL to use our program when drawing
         gl.useProgram(this.programInfo.program);
 
         // Set the shader uniforms
-        gl.uniform2fv(this.programInfo.uniformLocations.scalingFactor, uniforms.scalingFactor);
-        gl.uniform2fv(this.programInfo.uniformLocations.axis, uniforms.axis);
+        this.setUniforms(uniforms);
 
         const offset = 0;
         gl.drawArrays(gl.TRIANGLES, offset, buffers.vertexCount);
     }
-}
-
-function getInsets(state) {
-    const lineWidth = state.lineWidth / 2;
-    const insets = [];
-    for (let i = 0; i < state.dims; i++) {
-        insets.push([]);
-    }
-
-    for (let i = 0; i < state.dims; i++) {
-        const s0 = state.basis[0][i];
-        const s1 = state.basis[1][i];
-        for (let j = 0; j < state.dims; j++) {
-            if (i === j) {
-                insets[i][j] = 0;
-            } else {
-                const t0 = state.basis[0][j];
-                const t1 = state.basis[1][j];
-                insets[i][j] = lineWidth * Math.hypot(t0, t1) / Math.abs(s0*t1 - s1*t0);
-                insets[i][j] = Math.min(insets[i][j], 0.5);
-            }
-        }
-    }
-    return insets;
 }
 
 //

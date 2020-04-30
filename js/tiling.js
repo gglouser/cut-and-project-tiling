@@ -311,23 +311,6 @@ function hypercubeVertices(n) {
     return vs;
 }
 
-export function getFaceTypes(dims) {
-    const faceType = [];
-    for (let i = 0; i < dims; i++) {
-        faceType.push([]);
-    }
-
-    let typeIx = 0;
-    for (let i = 0; i < dims-1; i++) {
-        for (let j = i+1; j < dims; j++) {
-            faceType[i][j] = typeIx;
-            faceType[j][i] = typeIx;
-            typeIx += 1;
-        }
-    }
-    return faceType;
-}
-
 // Generate the tiling using the multigrid method.
 export function generateMultigrid(state, viewWidth, viewHeight) {
     // It will be useful to have the projection of each axis on the view plane.
