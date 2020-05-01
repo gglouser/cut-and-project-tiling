@@ -1,5 +1,5 @@
 import { TilingState } from './tiling.js';
-import { encodeState, decodeState, base64ToBlob } from './statecode.js';
+import { encodeState, decodeState, base64ToBlob, makeColor } from './statecode.js';
 import { RendererGL } from './rendergl.js';
 
 const GRID_SCALE_INIT = 60;
@@ -308,18 +308,21 @@ class Renderer2D {
 
         ctx.lineWidth = state.lineWidth;
         ctx.lineJoin = 'bevel';
-        ctx.strokeStyle = state.lineColor;
+        ctx.strokeStyle = makeColor(state.lineColor);
         faces.forEach((f) => {
-            ctx.fillStyle = state.getColor(f.axis1, f.axis2);
+            ctx.fillStyle = makeColor(state.getColor(f.axis1, f.axis2));
+            const side1 = [state.basis[0][f.axis1], state.basis[1][f.axis1]];
+            const side2 = [state.basis[0][f.axis2], state.basis[1][f.axis2]];
+            ctx.translate(f.keyVert[0], f.keyVert[1]);
             ctx.beginPath();
-            ctx.moveTo(f.keyVert[0], f.keyVert[1]);
-            ctx.lineTo(f.keyVert[0] + state.basis[0][f.axis1], f.keyVert[1] + state.basis[1][f.axis1]);
-            ctx.lineTo(f.keyVert[0] + state.basis[0][f.axis1] + state.basis[0][f.axis2],
-                       f.keyVert[1] + state.basis[1][f.axis1] + state.basis[1][f.axis2]);
-            ctx.lineTo(f.keyVert[0] + state.basis[0][f.axis2], f.keyVert[1] + state.basis[1][f.axis2]);
+            ctx.moveTo(0, 0);
+            ctx.lineTo(side1[0], side1[1]);
+            ctx.lineTo(side1[0] + side2[0], side1[1] + side2[1]);
+            ctx.lineTo(side2[0], side2[1]);
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
+            ctx.translate(-f.keyVert[0], -f.keyVert[1]);
         });
 
         ctx.restore();

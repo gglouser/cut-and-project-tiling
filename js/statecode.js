@@ -12,7 +12,7 @@ function colorhex(n) {
         .toString(16).padStart(2, '0');
 }
 
-export function makeColor(r,g,b) {
+export function makeColor([r,g,b]) {
     return `#${colorhex(r)}${colorhex(g)}${colorhex(b)}`;
 }
 

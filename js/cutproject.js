@@ -132,7 +132,7 @@ class TilingApp {
                 const colorIxHere = colorIx++;
                 const ctl = document.createElement('input');
                 ctl.type = 'color';
-                ctl.value = makeColor(...this.state.colors[colorIxHere]);
+                ctl.value = makeColor(this.state.colors[colorIxHere]);
                 ctl.style.width = widthStyle;
                 ctl.addEventListener('input', () => {
                     this.state.colors[colorIxHere] = splitColor(ctl.value);
