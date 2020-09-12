@@ -19,12 +19,14 @@ module.exports = {
     new WasmPackPlugin({
       crateDirectory: path.resolve(__dirname, "crate")
     }),
-    new CopyWebpackPlugin([
-      "index.html",
-      "css/*",
-      "docs/*",
-      "images/*"
-    ]),
+    new CopyWebpackPlugin({
+      patterns: [
+        "index.html",
+        "css/*",
+        "docs/*",
+        "images/*"
+      ]
+    }),
 
     new webpack.ProvidePlugin({
       // wasm-bindgen requires TextEncoder/TextDecoder
