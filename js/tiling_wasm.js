@@ -1,5 +1,5 @@
 // Extra glue for Rust WebAssembly implementation of multigrid tiling generator.
-import * as Tiling_rs from '../crate/pkg';
+import * as Tiling_rs from '../pkg/tiling_rs.js';
 
 export function generateWasm(state, viewWidth, viewHeight) {
     const faceList = Tiling_rs.generate(
