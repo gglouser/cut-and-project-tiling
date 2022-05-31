@@ -14,31 +14,23 @@ Check out a small [gallery of examples](docs/gallery.md).
 
 ## Requirements
 
-This applet includes a WebAssembly implementation of the tiling generator. That piece is written in Rust and uses wasm-bindgen and wasm-pack to build the wasm module. Until browser support for wasm-modules-as-ES6-modules improves, the easiest way to use a wasm module is with a bundler like webpack.
+This applet includes a WebAssembly implementation of the tiling generator. That piece is written in Rust and uses wasm-bindgen to build the wasm module.
 
 Prerequisites:
 
 1. Install [Rust and cargo](https://www.rust-lang.org/tools/install)
 
-2. Install [node and npm](http://nodejs.org)
+2. Install [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen)
 
-3. Install [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
+To build the wasm module:
 
-4. Install project dependencies:
+    cd crate
+    cargo build --target wasm32-unknown-unknown --release
+    wasm-bindgen --target web --out-dir ../pkg ./target/wasm32-unknown-unknown/release/tiling_rs.wasm
 
-        npm install
+To build the `dist` directory for deployment:
 
-To run dev server:
-
-    npm run start
-
-To run dev server in debug mode:
-
-    npm run debug
-
-To build for deployment (into `dist` subdirectory):
-
-    npm run build
+    py build_dist.py --clean
 
 
 ## Acknowledgments
