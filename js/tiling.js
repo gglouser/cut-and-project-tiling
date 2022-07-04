@@ -5,7 +5,7 @@ const CUT_CHECK_EPS = 1e3 * Number.EPSILON;
 
 export class TilingState {
     constructor(dims) {
-        this.dims = dims;
+        this.dims = Math.max(dims, 3);
         this.resetBasis();
         this.resetOffset();
     }
