@@ -42,6 +42,9 @@
 #axesExtra {
     display: flex;
 }
+#numAxes {
+    width: 20%;
+}
 #numAxesLabel {
     padding: 0 5px 0 2px;
 }

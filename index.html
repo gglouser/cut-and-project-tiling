@@ -4,7 +4,7 @@
     <title>Cut and Project Tiling</title>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <link rel="stylesheet" href="css/main.css">
-    <script type="module" src="bundle.js"></script>
+    <script type="module" src="js/bootstrap.js"></script>
   </head>
   <body>
     <canvas id="main">This applet requires the canvas, which your browser does not support.</canvas>
@@ -32,14 +32,7 @@
       <div id="axisControls">
         <canvas id="axisRosette"></canvas>
         <div id="axesExtra">
-          <select id="numAxes">
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5" selected>5</option>
-            <option value="6">6</option>
-            <option value="7">7</option>
-            <option value="17">17</option>
-          </select>
+          <input type="number" id="numAxes" value="5" min="3" max="30">
           <span id="numAxesLabel">axes</span>
           <input type="button" id="reset" value="Reset Axes">
         </div>
